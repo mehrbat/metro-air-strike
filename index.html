@@ -1,0 +1,1743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Low Level Strike</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --hud: #9dffb8;
+    --hud-dim: rgba(157, 255, 184, .55);
+    --amber: #ffbf47;
+    --red: #ff4f4f;
+    --panel: rgba(8, 14, 20, .86);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #05070b; color: var(--hud);
+    font-family: 'Share Tech Mono', ui-monospace, Consolas, monospace; user-select: none;
+  }
+  #c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  .hidden { display: none !important; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; font-size: 15px; text-shadow: 0 0 6px rgba(60, 255, 140, .45); }
+  #tl { position: absolute; top: 16px; left: 20px; line-height: 1.6; }
+  #tr { position: absolute; top: 16px; right: 20px; text-align: right; line-height: 1.6; }
+  .dim { color: var(--hud-dim); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .bar { width: 130px; height: 8px; border: 1px solid currentColor; position: relative; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: currentColor; }
+  .st { padding: 2px 8px; border: 1px solid currentColor; display: inline-block; letter-spacing: 1px; }
+  .st.amber, .amber { color: var(--amber); }
+  .st.red { color: var(--red); animation: blink .45s steps(2) infinite; }
+  .redtxt { color: var(--red); }
+  #warn { position: absolute; top: 20%; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .w { font-size: 24px; letter-spacing: 5px; padding: 3px 14px; border: 2px solid currentColor; background: rgba(0, 0, 0, .25); }
+  .w.red { color: var(--red); animation: blink .4s steps(2) infinite; }
+  .w.amber { color: var(--amber); }
+  @keyframes blink { 50% { opacity: .15; } }
+
+  #bl { position: absolute; left: 20px; bottom: 20px; line-height: 1.7; }
+  .g { display: flex; align-items: baseline; gap: 8px; }
+  .g label { width: 36px; color: var(--hud-dim); }
+  .g b { font-size: 30px; min-width: 84px; text-align: right; font-weight: normal; }
+  .g small { color: var(--hud-dim); }
+  #br { position: absolute; right: 20px; bottom: 20px; display: flex; align-items: flex-end; gap: 14px; }
+  #radar { width: 200px; height: 200px; }
+  #weap { text-align: right; line-height: 1.6; }
+  #weap b { font-size: 22px; font-weight: normal; }
+
+  #fpm { position: absolute; width: 44px; height: 20px; margin: -10px 0 0 -22px; }
+  .mk { position: absolute; transform: translate(-50%, -50%); font-size: 11px; color: var(--red); text-align: center; white-space: nowrap; }
+  .mk i { display: block; width: 14px; height: 14px; margin: 0 auto 2px; border: 1.5px solid currentColor; transform: rotate(45deg); }
+  .mk.idle { color: rgba(255, 120, 100, .55); }
+  #tgtMk { position: absolute; transform: translate(-50%, -50%); color: #ffe066; text-align: center; font-size: 12px; white-space: nowrap; text-shadow: 0 0 6px rgba(255, 220, 80, .6); }
+  #tgtMk .dia { width: 22px; height: 22px; margin: 0 auto 3px; border: 2px solid currentColor; transform: rotate(45deg); }
+  #tgtMk .arrow { display: none; width: 0; height: 0; margin: 0 auto 3px; border-left: 11px solid transparent; border-right: 11px solid transparent; border-bottom: 20px solid currentColor; }
+  #tgtMk.off .dia { display: none; }
+  #tgtMk.off .arrow { display: block; }
+  #lockBox { position: absolute; width: 50px; height: 50px; margin: -25px 0 0 -25px; border: 1.5px dashed var(--hud); }
+  #lockBox span { position: absolute; top: -18px; left: 0; right: 0; text-align: center; font-size: 11px; }
+  #lockBox.locked { border: 2px solid var(--red); color: var(--red); width: 38px; height: 38px; margin: -19px 0 0 -19px; }
+  #toast { position: absolute; left: 0; right: 0; bottom: 30%; text-align: center; font-size: 20px; letter-spacing: 2px; opacity: 0; transition: opacity .3s; }
+  #toast.on { opacity: 1; }
+  #dmg { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 40%, rgba(255, 30, 20, .7) 100%); }
+
+  /* ---------- Screens ---------- */
+  .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, .25), rgba(0, 0, 0, .7)); }
+  .panel { width: 100%; max-width: 660px; max-height: calc(100vh - 32px); overflow: auto; background: var(--panel);
+    border: 1px solid rgba(157, 255, 184, .3); padding: 28px 32px; box-shadow: 0 0 40px rgba(0, 0, 0, .6); }
+  h1 { margin: 0 0 6px; font-size: 40px; letter-spacing: 6px; font-weight: normal; }
+  h2 { margin: 0 0 10px; font-size: 32px; letter-spacing: 5px; font-weight: normal; }
+  .lead { color: #d6efe0; line-height: 1.5; margin: 8px 0 18px; }
+  .controls { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin-bottom: 16px; font-size: 14px; }
+  kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px solid var(--hud-dim); text-align: center; font-family: inherit; margin-right: 3px; color: #e8fff0; }
+  .tips { margin: 0 0 20px; padding-left: 18px; color: #c8dccf; line-height: 1.55; font-size: 14px; }
+  button { pointer-events: auto; font-family: inherit; font-size: 18px; letter-spacing: 3px; padding: 10px 22px; cursor: pointer;
+    color: #04130a; background: var(--hud); border: none; }
+  button:hover { filter: brightness(1.15); }
+  button.ghost { background: transparent; color: var(--hud); border: 1px solid var(--hud-dim); }
+  .btns { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+  .small { font-size: 12px; color: var(--hud-dim); margin: 14px 0 0; }
+  #endStats { display: grid; grid-template-columns: auto auto; gap: 4px 30px; justify-content: start; font-size: 16px; color: #e0f5e8; }
+  #endTitle.fail { color: var(--red); }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; letter-spacing: 3px; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="loading">LOADING…</div>
+
+<div id="hud" class="hidden">
+  <div id="tl">
+    <div id="hMission">MISSION 1</div>
+    <div class="dim">OBJ: DESTROY COMMAND CENTER</div>
+    <div class="row" style="color:#ffe066">TGT <div class="bar"><i id="hTgtBar"></i></div></div>
+    <div id="hScore">SCORE 0</div>
+    <div id="hLow" class="dim">&nbsp;</div>
+  </div>
+  <div id="tr">
+    <div><span id="hRadar" class="st">RADAR: MASKED</span></div>
+    <div id="hHdg" class="dim">HDG 000</div>
+    <div id="hKills" class="dim"></div>
+  </div>
+  <div id="warn"></div>
+  <svg id="fpm" viewBox="0 0 44 20"><circle cx="22" cy="10" r="6" fill="none" stroke="#9dffb8" stroke-width="1.6"/><path d="M2 10H16M28 10H42M22 4V0" stroke="#9dffb8" stroke-width="1.6"/></svg>
+  <div id="markers"></div>
+  <div id="tgtMk"><div class="dia"></div><div class="arrow"></div><span id="tgtTxt"></span></div>
+  <div id="lockBox" class="hidden"><span>LOCKING</span></div>
+  <div id="bl">
+    <div class="g"><label>SPD</label><b id="hSpd">0</b><small>KT</small></div>
+    <div class="g"><label>ALT</label><b id="hAlt">0</b><small>M</small></div>
+    <div class="row">A/B&nbsp; <div class="bar"><i id="hAb"></i></div></div>
+    <div class="row" id="hHullRow">HULL <div class="bar"><i id="hHull"></i></div></div>
+  </div>
+  <div id="br">
+    <div id="weap">
+      <div>MSL <b id="hMsl">8</b></div>
+      <div>FLR <b id="hFlr">16</b></div>
+      <div id="hLockState" class="dim">NO LOCK</div>
+    </div>
+    <canvas id="radar" width="400" height="400"></canvas>
+  </div>
+  <div id="toast"></div>
+  <div id="dmg"></div>
+</div>
+
+<div id="title" class="screen hidden">
+  <div class="panel">
+    <h1>LOW LEVEL STRIKE</h1>
+    <p class="lead">Fly your strike fighter through the city at rooftop height and destroy the command center
+      (follow the red beacon). SAM sites and flak guns defend the city. Buildings block their radar, so stay low and keep cover between you and them.</p>
+    <div class="controls">
+      <div><kbd>W</kbd><kbd>S</kbd></div><div>Climb / dive (also ↑ ↓; <kbd>I</kbd> inverts)</div>
+      <div><kbd>A</kbd><kbd>D</kbd></div><div>Bank and turn (also ← →)</div>
+      <div><kbd>Shift</kbd></div><div>Afterburner (drains, recharges)</div>
+      <div><kbd>X</kbd></div><div>Air brake: slower, tighter turns</div>
+      <div><kbd>Space</kbd></div><div>Fire missile (homes on a locked target)</div>
+      <div><kbd>F</kbd></div><div>Flares (can decoy incoming SAMs)</div>
+      <div><kbd>C</kbd> <kbd>P</kbd> <kbd>M</kbd></div><div>Camera · Pause · Mute</div>
+    </div>
+    <ul class="tips">
+      <li>Point the nose at a target to lock it. Three missile hits destroy the command center.</li>
+      <li>A SAM missile that loses sight of you behind a building loses its lock.</li>
+      <li>Below 45 m, ground clutter makes enemy radar lock about twice as slow.</li>
+      <li>Sharp turns and flares beat missiles. Flak leads your flight path, so keep changing it.</li>
+    </ul>
+    <button id="btnStart">START MISSION</button>
+    <p class="small">Keyboard required · Enter to start</p>
+  </div>
+</div>
+
+<div id="pause" class="screen hidden">
+  <div class="panel" style="max-width:420px">
+    <h2>PAUSED</h2>
+    <p class="dim">P or Esc to resume</p>
+    <div class="btns"><button id="btnResume">RESUME</button><button id="btnAbort" class="ghost">RESTART</button></div>
+  </div>
+</div>
+
+<div id="end" class="screen hidden">
+  <div class="panel" style="max-width:520px">
+    <h2 id="endTitle"></h2>
+    <p id="endReason" class="lead"></p>
+    <div id="endStats"></div>
+    <div class="btns"><button id="btnPrimary"></button><button id="btnSecondary" class="ghost"></button></div>
+    <p class="small">Enter: primary action</p>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// =====================================================================
+// Constants
+// =====================================================================
+const PITCH = 180, STREET = 50, BLOCK = PITCH - STREET;   // city grid, metres
+const N_CITY = 22, HALF = N_CITY * PITCH / 2;              // defended city core (±1980 m)
+const N_GEN = 30, GHALF = N_GEN * PITCH / 2;               // generated area incl. suburbs (±2700 m)
+const AO_LIMIT = HALF + 600;                               // leave this box and the mission aborts
+const WIN_U = 64;                                          // metres per window-texture repeat
+const SAM_RANGE = 1300, AAA_RANGE = 760, LOCK_RANGE = 1500, LOW_ALT = 45;
+const CELL = 60;                                           // collision hash cell size
+const FOG_NEAR = 280, FOG_FAR = 2500;
+const FOG_COLOR = new THREE.Color(0x8c7088);
+
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const rnd = (a, b) => a + (b - a) * Math.random();
+const Z_NEG = V(0, 0, -1), ZERO = V(), UP = V(0, 1, 0);
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let srand = Math.random;                                    // seeded RNG for city generation
+const sr = (a, b) => a + (b - a) * srand();
+function shuffle(a, r = Math.random) { for (let i = a.length - 1; i > 0; i--) { const j = (r() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function randUnit(out) { do { out.set(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)); } while (out.lengthSq() > 1 || out.lengthSq() < 0.01); return out.normalize(); }
+function lerpAngle(a, b, t) { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * t; }
+
+// =====================================================================
+// Renderer, scene, camera, lights, sky
+// =====================================================================
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight, false);
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
+scene.background = FOG_COLOR;
+const camera = new THREE.PerspectiveCamera(66, innerWidth / innerHeight, 1, 7000);
+
+const sunDir = V(-0.55, 0.22, -0.8).normalize();
+scene.add(new THREE.HemisphereLight(0xb4c2ee, 0x4a3a34, 2.2));
+const sun = new THREE.DirectionalLight(0xffb98c, 2.4);
+sun.position.copy(sunDir).multiplyScalar(1000);
+scene.add(sun);
+
+const flashLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xffa050, 0, 340, 0); scene.add(l); return l; });
+let flashIdx = 0;
+function flash(pos, intensity) { const l = flashLights[flashIdx++ % flashLights.length]; l.position.copy(pos); l.intensity = Math.max(l.intensity, intensity); }
+
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(5000, 32, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      top: { value: new THREE.Color(0x111a44) }, horizon: { value: FOG_COLOR },
+      sunCol: { value: new THREE.Color(0xffa060) }, sunDir: { value: sunDir },
+    },
+    vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+      uniform vec3 top, horizon, sunCol, sunDir; varying vec3 vDir;
+      void main(){
+        vec3 d = normalize(vDir);
+        float h = clamp(d.y, 0.0, 1.0);
+        vec3 c = mix(horizon, top, pow(h, 0.5));
+        float s = max(dot(d, sunDir), 0.0);
+        c += sunCol * (pow(s, 6.0) * 0.45 + pow(s, 300.0) * 2.0) * (1.0 - h * 0.6);
+        gl_FragColor = vec4(c, 1.0);
+        #include <colorspace_fragment>
+      }`,
+  }),
+);
+sky.renderOrder = -1;
+scene.add(sky);
+
+// =====================================================================
+// Procedural textures
+// =====================================================================
+function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function toTex(c) {
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = maxAniso;
+  return t;
+}
+
+// Facade: 16x16 grid of 4 m windows. The bottom-left pixel is always plain wall; roofs sample it.
+function makeWindowTextures() {
+  const S = 512, n = 16, cs = S / n;
+  const a = makeCanvas(S, S), g = a.getContext('2d');
+  const e = makeCanvas(S, S), h = e.getContext('2d');
+  g.fillStyle = '#a3a5ad'; g.fillRect(0, 0, S, S);
+  h.fillStyle = '#000'; h.fillRect(0, 0, S, S);
+  const lit = ['#ffd793', '#ffe7bf', '#d6e6ff', '#ffc47a', '#fff1d6'];
+  for (let j = 0; j < n; j++) {
+    g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, j * cs + cs - 4, S, 3);
+    const floorLit = Math.random() < 0.22;
+    for (let i = 0; i < n; i++) {
+      const x = i * cs + 5, y = j * cs + 6, w = cs - 10, hh = cs - 13;
+      if (Math.random() < (floorLit ? 0.75 : 0.17)) {
+        const col = lit[(Math.random() * lit.length) | 0];
+        g.fillStyle = col; g.fillRect(x, y, w, hh);
+        h.globalAlpha = rnd(0.5, 1); h.fillStyle = col; h.fillRect(x, y, w, hh); h.globalAlpha = 1;
+      } else {
+        g.fillStyle = Math.random() < 0.5 ? '#1e2534' : '#283044'; g.fillRect(x, y, w, hh);
+        g.fillStyle = 'rgba(140,165,200,0.16)'; g.fillRect(x, y, w, hh * 0.35);
+      }
+    }
+  }
+  return { map: toTex(a), emissive: toTex(e) };
+}
+
+// One grid tile (block + half street on every side). Tile edges are street centre lines.
+function makeGroundTexture() {
+  const S = 512, k = S / PITCH, g = makeCanvas(S, S), c = g.getContext('2d');
+  const s0 = (STREET / 2) * k, s1 = (PITCH - STREET / 2) * k;
+  c.fillStyle = '#2b2c31'; c.fillRect(0, 0, S, S);
+  c.fillStyle = '#5a5a60'; c.fillRect(s0, s0, s1 - s0, s1 - s0);              // sidewalk
+  c.fillStyle = '#3c3d42'; c.fillRect(s0 + 4 * k, s0 + 4 * k, s1 - s0 - 8 * k, s1 - s0 - 8 * k);
+  c.fillStyle = '#c9a640';                                                     // centre lines
+  c.fillRect(0, s0, 1.2, s1 - s0); c.fillRect(S - 1.2, s0, 1.2, s1 - s0);
+  c.fillRect(s0, 0, s1 - s0, 1.2); c.fillRect(s0, S - 1.2, s1 - s0, 1.2);
+  c.fillStyle = 'rgba(230,230,230,0.6)';                                       // lane dashes
+  for (let t = s0; t < s1; t += 9 * k) {
+    for (const o of [9 * k, S - 9 * k]) { c.fillRect(o - 0.6, t, 1.2, 4 * k); c.fillRect(t, o - 0.6, 4 * k, 1.2); }
+  }
+  c.fillStyle = 'rgba(235,235,235,0.55)';                                      // crosswalks
+  for (let t = 1.5 * k; t < s0 - k; t += 3 * k) {
+    for (const yy of [s0 - 4.5 * k, s1 + 0.5 * k]) { c.fillRect(t, yy, 1.6 * k, 4 * k); c.fillRect(S - t - 1.6 * k, yy, 1.6 * k, 4 * k); }
+    for (const xx of [s0 - 4.5 * k, s1 + 0.5 * k]) { c.fillRect(xx, t, 4 * k, 1.6 * k); c.fillRect(xx, S - t - 1.6 * k, 4 * k, 1.6 * k); }
+  }
+  return toTex(g);
+}
+
+function makeBlobTexture() {
+  const g = makeCanvas(128, 128), c = g.getContext('2d');
+  const grd = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(0,0,0,0.75)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = grd; c.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(g); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+const winTex = makeWindowTextures();
+const cityMat = new THREE.MeshLambertMaterial({
+  map: winTex.map, emissiveMap: winTex.emissive, emissive: 0xffffff, emissiveIntensity: 1.15, vertexColors: true,
+});
+const groundTex = makeGroundTexture();
+const GROUND_TILES = 60;
+groundTex.repeat.set(GROUND_TILES, GROUND_TILES);
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(GROUND_TILES * PITCH, GROUND_TILES * PITCH).rotateX(-Math.PI / 2),
+  new THREE.MeshLambertMaterial({ map: groundTex }),
+);
+scene.add(ground);
+
+// =====================================================================
+// Particle systems (GPU points, CPU simulated)
+// =====================================================================
+const pointMaterials = [];
+function makePointsMaterial(additive) {
+  const m = new THREE.ShaderMaterial({
+    uniforms: {
+      uScale: { value: 600 }, uNear: { value: FOG_NEAR }, uFar: { value: FOG_FAR },
+      uFogColor: { value: FOG_COLOR }, uGlobal: { value: 1 },
+    },
+    vertexShader: `
+      attribute vec3 pcolor; attribute float psize; attribute float palpha;
+      uniform float uScale;
+      varying vec3 vColor; varying float vAlpha; varying float vDepth;
+      void main(){
+        vColor = pcolor; vAlpha = palpha;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vDepth = -mv.z;
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = clamp(psize * uScale / max(-mv.z, 0.5), 1.5, 280.0);
+        if (palpha <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; }
+      }`,
+    fragmentShader: `
+      uniform float uNear, uFar, uGlobal; uniform vec3 uFogColor;
+      varying vec3 vColor; varying float vAlpha; varying float vDepth;
+      void main(){
+        float d = length(gl_PointCoord - 0.5) * 2.0;
+        if (d > 1.0) discard;
+        float a = 1.0 - d; a *= a;
+        float f = smoothstep(uNear, uFar * 1.2, vDepth);
+        ${additive
+          ? 'gl_FragColor = vec4(vColor * (vAlpha * a * uGlobal * (1.0 - f)), 1.0);'
+          : 'gl_FragColor = vec4(mix(vColor, uFogColor, f), vAlpha * a * uGlobal);'}
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+  });
+  pointMaterials.push(m);
+  return m;
+}
+
+class Particles {
+  constructor(max, additive) {
+    this.max = max; this.head = 0;
+    this.pos = new Float32Array(max * 3); this.col = new Float32Array(max * 3);
+    this.size = new Float32Array(max); this.alpha = new Float32Array(max);
+    this.vel = new Float32Array(max * 3); this.life = new Float32Array(max); this.maxLife = new Float32Array(max);
+    this.s0 = new Float32Array(max); this.s1 = new Float32Array(max); this.a0 = new Float32Array(max);
+    this.drag = new Float32Array(max); this.grav = new Float32Array(max);
+    const g = new THREE.BufferGeometry();
+    this.aPos = new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage);
+    this.aCol = new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage);
+    this.aSize = new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage);
+    this.aAlpha = new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('position', this.aPos); g.setAttribute('pcolor', this.aCol);
+    g.setAttribute('psize', this.aSize); g.setAttribute('palpha', this.aAlpha);
+    this.points = new THREE.Points(g, makePointsMaterial(additive));
+    this.points.frustumCulled = false;
+    scene.add(this.points);
+  }
+  spawn(x, y, z, vx, vy, vz, life, r, g, b, s0, s1, a0 = 1, drag = 0, grav = 0) {
+    const i = this.head; this.head = (this.head + 1) % this.max; const i3 = i * 3;
+    this.pos[i3] = x; this.pos[i3 + 1] = y; this.pos[i3 + 2] = z;
+    this.vel[i3] = vx; this.vel[i3 + 1] = vy; this.vel[i3 + 2] = vz;
+    this.col[i3] = r; this.col[i3 + 1] = g; this.col[i3 + 2] = b;
+    this.life[i] = life; this.maxLife[i] = life; this.s0[i] = s0; this.s1[i] = s1; this.a0[i] = a0;
+    this.drag[i] = drag; this.grav[i] = grav; this.size[i] = s0; this.alpha[i] = 0.0001;
+    this.colDirty = true;
+  }
+  update(dt) {
+    const { pos, vel, life, maxLife, size, alpha } = this;
+    for (let i = 0; i < this.max; i++) {
+      let l = life[i];
+      if (l <= 0) continue;
+      l -= dt; life[i] = l;
+      if (l <= 0) { alpha[i] = 0; continue; }
+      const t = 1 - l / maxLife[i], i3 = i * 3, d = Math.max(0, 1 - this.drag[i] * dt);
+      vel[i3] *= d; vel[i3 + 1] = vel[i3 + 1] * d - this.grav[i] * dt; vel[i3 + 2] *= d;
+      pos[i3] += vel[i3] * dt; pos[i3 + 1] += vel[i3 + 1] * dt; pos[i3 + 2] += vel[i3 + 2] * dt;
+      size[i] = this.s0[i] + (this.s1[i] - this.s0[i]) * t;
+      alpha[i] = this.a0[i] * Math.min(1, t * 10) * (1 - t);
+    }
+    this.aPos.needsUpdate = this.aSize.needsUpdate = this.aAlpha.needsUpdate = true;
+    if (this.colDirty) { this.aCol.needsUpdate = true; this.colDirty = false; }
+  }
+  clear() { this.life.fill(0); this.alpha.fill(0); this.aAlpha.needsUpdate = true; }
+}
+const fx = new Particles(9000, true);      // fire, tracers, flares, glows
+const smoke = new Particles(5000, false);  // smoke, flak puffs
+
+function makeStaticPoints(posArr, colorFn, size, alpha) {
+  const n = posArr.length / 3, g = new THREE.BufferGeometry();
+  const col = new Float32Array(n * 3), sz = new Float32Array(n).fill(size), al = new Float32Array(n).fill(alpha);
+  for (let i = 0; i < n; i++) col.set(colorFn(i), i * 3);
+  g.setAttribute('position', new THREE.Float32BufferAttribute(posArr, 3));
+  g.setAttribute('pcolor', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('psize', new THREE.BufferAttribute(sz, 1));
+  g.setAttribute('palpha', new THREE.BufferAttribute(al, 1));
+  const p = new THREE.Points(g, makePointsMaterial(true));
+  p.frustumCulled = false;
+  return p;
+}
+
+// Street lamps along every sidewalk (layout never changes, so built once)
+(function buildStreetLights() {
+  const pos = [];
+  for (let k = 0; k <= N_GEN; k++) {
+    const s = -GHALF + k * PITCH;
+    for (let t = -GHALF; t <= GHALF; t += 42) {
+      const m = (((t + GHALF) % PITCH) + PITCH) % PITCH;
+      if (m < STREET / 2 + 3 || m > PITCH - STREET / 2 - 3) continue;
+      for (const o of [-21, 21]) { pos.push(s + o, 7.5, t); pos.push(t, 7.5, s + o); }
+    }
+  }
+  scene.add(makeStaticPoints(pos, () => [1.0, 0.6, 0.26], 3.6, 0.7));
+})();
+
+// Traffic: head/tail lights crawling along the streets
+const traffic = (() => {
+  const n = 1200, cars = [], pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const lane = [-10, -5, 5, 10][(Math.random() * 4) | 0];
+    cars.push({ axis: Math.random() < 0.5 ? 0 : 1, s: -GHALF + ((Math.random() * (N_GEN + 1)) | 0) * PITCH, lane,
+      t: rnd(-GHALF, GHALF), v: Math.sign(lane) * rnd(9, 18) });
+  }
+  const p = makeStaticPoints(pos, (i) => (cars[i].v > 0 ? [1, 0.92, 0.75] : [1, 0.12, 0.08]), 3.2, 0.95);
+  scene.add(p);
+  const attr = p.geometry.getAttribute('position');
+  attr.setUsage(THREE.DynamicDrawUsage);
+  return {
+    update(dt) {
+      const a = attr.array;
+      for (let i = 0; i < n; i++) {
+        const c = cars[i];
+        c.t += c.v * dt;
+        if (c.t > GHALF) c.t -= 2 * GHALF; else if (c.t < -GHALF) c.t += 2 * GHALF;
+        if (c.axis === 0) { a[i * 3] = c.t; a[i * 3 + 1] = 1.2; a[i * 3 + 2] = c.s + c.lane; }
+        else { a[i * 3] = c.s + c.lane; a[i * 3 + 1] = 1.2; a[i * 3 + 2] = c.t; }
+      }
+      attr.needsUpdate = true;
+    },
+  };
+})();
+
+// =====================================================================
+// City geometry builder (one merged mesh) + collision grid
+// =====================================================================
+class GeoBuilder {
+  constructor() { this.pos = []; this.nor = []; this.uv = []; this.col = []; this.idx = []; }
+  quad(a, b, c, d, n, uvs, col) {
+    const base = this.pos.length / 3;
+    for (const p of [a, b, c, d]) this.pos.push(p[0], p[1], p[2]);
+    for (let i = 0; i < 4; i++) { this.nor.push(n[0], n[1], n[2]); this.uv.push(uvs[i][0], uvs[i][1]); this.col.push(col[0], col[1], col[2]); }
+    this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  // Box with world-space UVs so windows line up with floors on every building.
+  box(x0, y0, z0, x1, y1, z1, col, windows = true, ou = 0, ov = 0, roofCol = null) {
+    const U = WIN_U, R = [0.002, 0.002];
+    const side = (a0, a1) => (windows
+      ? [[a0 / U + ou, y0 / U + ov], [a1 / U + ou, y0 / U + ov], [a1 / U + ou, y1 / U + ov], [a0 / U + ou, y1 / U + ov]]
+      : [R, R, R, R]);
+    this.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], side(x0, x1), col);
+    this.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], side(-x1, -x0), col);
+    this.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], side(-z1, -z0), col);
+    this.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], side(z0, z1), col);
+    const rc = roofCol || [col[0] * 0.55, col[1] * 0.55, col[2] * 0.55];
+    this.quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], [R, R, R, R], rc);
+  }
+  build() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    g.setIndex(this.idx);
+    g.computeBoundingSphere();
+    return g;
+  }
+}
+
+const PAL = [[0.78, 0.78, 0.82], [0.6, 0.69, 0.86], [0.88, 0.78, 0.62], [0.55, 0.56, 0.6],
+  [0.92, 0.9, 0.86], [0.72, 0.62, 0.56], [0.5, 0.63, 0.72], [0.66, 0.7, 0.66]];
+
+const world = { group: null, disposables: [], buildings: [], grid: new Map(), maxH: 0, sites: [], target: null, spawn: V(), warn: null };
+const gk = (cx, cz) => cx * 4099 + cz;
+function addSolid(b) {
+  world.buildings.push(b);
+  world.maxH = Math.max(world.maxH, b.h);
+  for (let cx = Math.floor(b.x0 / CELL); cx <= Math.floor(b.x1 / CELL); cx++) {
+    for (let cz = Math.floor(b.z0 / CELL); cz <= Math.floor(b.z1 / CELL); cz++) {
+      const k = gk(cx, cz); let l = world.grid.get(k);
+      if (!l) world.grid.set(k, (l = []));
+      l.push(b);
+    }
+  }
+  return b;
+}
+function solidAt(x, y, z) {
+  if (y <= 0.5) return true;
+  if (y > world.maxH) return false;
+  const l = world.grid.get(gk(Math.floor(x / CELL), Math.floor(z / CELL)));
+  if (!l) return false;
+  for (let i = 0; i < l.length; i++) {
+    const b = l[i];
+    if (y < b.h && x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) return true;
+  }
+  return false;
+}
+function heightAt(x, z) {
+  const l = world.grid.get(gk(Math.floor(x / CELL), Math.floor(z / CELL)));
+  let h = 0;
+  if (l) for (const b of l) if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1 && b.h > h) h = b.h;
+  return h;
+}
+// Line of sight: march the segment and stop at the first solid sample.
+function los(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+  const steps = Math.ceil(Math.sqrt(dx * dx + dy * dy + dz * dz) / 7);
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    if (solidAt(a.x + dx * t, a.y + dy * t, a.z + dz * t)) return false;
+  }
+  return true;
+}
+
+// ---- shared meshes for defences ----
+const MAT = {
+  olive: new THREE.MeshLambertMaterial({ color: 0x55603d }),
+  metal: new THREE.MeshLambertMaterial({ color: 0x2c312b }),
+  wreck: new THREE.MeshLambertMaterial({ color: 0x141414 }),
+  concrete: new THREE.MeshLambertMaterial({ color: 0x70736a }),
+  white: new THREE.MeshLambertMaterial({ color: 0xd8dade }),
+};
+const GEO = {
+  samBase: new THREE.BoxGeometry(13, 1.4, 13).translate(0, 0.7, 0),
+  samDeck: new THREE.BoxGeometry(7, 1.6, 8).translate(0, 0.8, 0),
+  samTube: new THREE.BoxGeometry(1.5, 1.5, 9).translate(0, 0, -4.5),
+  samRadar: new THREE.BoxGeometry(5, 3.2, 0.4),
+  lamp: new THREE.SphereGeometry(0.8, 8, 6),
+  aaaBase: new THREE.CylinderGeometry(2.8, 3.2, 1.2, 10).translate(0, 0.6, 0),
+  aaaBody: new THREE.BoxGeometry(3.4, 2, 3.4).translate(0, 1, 0),
+  aaaBarrel: new THREE.CylinderGeometry(0.16, 0.2, 5.5, 6).rotateX(Math.PI / 2).translate(0, 0, -2.75),
+};
+
+function makeSAM() {
+  const g = new THREE.Group(), turret = new THREE.Group(), pivot = new THREE.Group();
+  const base = new THREE.Mesh(GEO.samBase, MAT.olive);
+  turret.position.y = 1.4;
+  pivot.position.set(0, 2.2, 1); pivot.rotation.x = 0.65;
+  for (const ix of [-1, 1]) for (const iy of [0, 1]) {
+    const t = new THREE.Mesh(GEO.samTube, MAT.metal); t.position.set(ix * 0.85, iy * 1.6 + 0.75, 0); pivot.add(t);
+  }
+  const radar = new THREE.Mesh(GEO.samRadar, MAT.metal); radar.position.set(0, 4.2, 3.6);
+  const lightMat = new THREE.MeshBasicMaterial({ color: 0x330000 });
+  world.disposables.push(lightMat);
+  const lamp = new THREE.Mesh(GEO.lamp, lightMat); lamp.position.set(0, 6.2, 3.6);
+  turret.add(new THREE.Mesh(GEO.samDeck, MAT.olive), pivot, radar, lamp);
+  g.add(base, turret);
+  return { g, base, turret, pivot, lightMat };
+}
+function makeAAA() {
+  const g = new THREE.Group(), turret = new THREE.Group(), pivot = new THREE.Group();
+  const base = new THREE.Mesh(GEO.aaaBase, MAT.olive);
+  turret.position.y = 1.2; pivot.position.y = 1.6;
+  for (const ix of [-0.7, 0.7]) { const b = new THREE.Mesh(GEO.aaaBarrel, MAT.metal); b.position.x = ix; pivot.add(b); }
+  const lightMat = new THREE.MeshBasicMaterial({ color: 0x331a00 });
+  world.disposables.push(lightMat);
+  const lamp = new THREE.Mesh(GEO.lamp, lightMat); lamp.scale.setScalar(0.6); lamp.position.set(0, 2.6, 1.2);
+  turret.add(new THREE.Mesh(GEO.aaaBody, MAT.olive), pivot, lamp);
+  g.add(base, turret);
+  return { g, base, turret, pivot, lightMat };
+}
+
+// =====================================================================
+// Level generation
+// =====================================================================
+function genBuildingsInBlock(gb, b, warnPts) {
+  const h0 = BLOCK / 2, x0 = b.cx - h0, z0 = b.cz - h0;
+  let hMin, hMax;
+  if (b.type === 'suburb') { hMin = 5; hMax = 20; }
+  else if (b.r < 0.3) { hMin = 60; hMax = 90 + 330 * (1 - b.r / 0.3) * (0.5 + 0.5 * srand()); }
+  else if (b.r < 0.62) { hMin = 22; hMax = 120; }
+  else { hMin = 10; hMax = 55; }
+  let nx, nz;
+  const L = srand();
+  if (b.type === 'suburb') nx = nz = 3;
+  else if (L < 0.22) nx = nz = 1;
+  else if (L < 0.42) { nx = 2; nz = 1; }
+  else if (L < 0.62) { nx = 1; nz = 2; }
+  else nx = nz = 2;
+  const lw = BLOCK / nx, ld = BLOCK / nz;
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    if (b.type === 'suburb' && srand() < 0.25) continue;
+    const inset = b.type === 'suburb' ? sr(6, 12) : sr(3, 8);
+    const bx0 = x0 + i * lw + inset, bx1 = x0 + (i + 1) * lw - inset;
+    const bz0 = z0 + j * ld + inset, bz1 = z0 + (j + 1) * ld - inset;
+    let h = hMin + (hMax - hMin) * Math.pow(srand(), 1.5);
+    if (nx * nz === 1 && b.type !== 'suburb') h *= 1.15;
+    h = Math.max(4, Math.round(h / 4) * 4);
+    const base = PAL[(srand() * PAL.length) | 0], k = sr(0.85, 1.1);
+    const col = [base[0] * k, base[1] * k, base[2] * k];
+    const ou = Math.floor(srand() * 16) / 16, ov = Math.floor(srand() * 16) / 16;
+    gb.box(bx0, 0, bz0, bx1, h, bz1, col, true, ou, ov);
+    const solid = addSolid({ x0: bx0, z0: bz0, x1: bx1, z1: bz1, h, roof: b.type === 'city', block: b });
+    let top = h, tx0 = bx0, tx1 = bx1, tz0 = bz0, tz1 = bz1;
+    if (h > 80 && srand() < 0.55) {                 // setback tower on top
+      const s = sr(0.15, 0.3), w = bx1 - bx0, d = bz1 - bz0;
+      tx0 = bx0 + w * s; tx1 = bx1 - w * s; tz0 = bz0 + d * s; tz1 = bz1 - d * s;
+      top = h + Math.round(sr(16, 70) / 4) * 4;
+      gb.box(tx0, h, tz0, tx1, top, tz1, col, true, ou, ov);
+      addSolid({ x0: tx0, z0: tz0, x1: tx1, z1: tz1, h: top });
+      solid.roof = false;
+      if (srand() < 0.4) {                          // spire
+        const mx = (tx0 + tx1) / 2, mz = (tz0 + tz1) / 2, sh = top + sr(18, 45);
+        gb.box(mx - 1, top, mz - 1, mx + 1, sh, mz + 1, [0.5, 0.5, 0.52], false);
+        addSolid({ x0: mx - 1, z0: mz - 1, x1: mx + 1, z1: mz + 1, h: sh });
+        warnPts.push(mx, sh + 1, mz);
+      }
+    }
+    if (b.type !== 'suburb' && srand() < 0.7) {     // rooftop clutter (visual only)
+      const cnt = 1 + ((srand() * 3) | 0);
+      for (let c = 0; c < cnt; c++) {
+        const w = sr(3, 8), d = sr(3, 8);
+        const rx = sr(tx0 + 2, Math.max(tx0 + 2, tx1 - 2 - w)), rz = sr(tz0 + 2, Math.max(tz0 + 2, tz1 - 2 - d));
+        gb.box(rx, top, rz, rx + w, top + sr(2, 5), rz + d, [col[0] * 0.6, col[1] * 0.6, col[2] * 0.6], false);
+      }
+    }
+    if (top > 140) for (const [wx, wz] of [[tx0, tz0], [tx1, tz0], [tx0, tz1], [tx1, tz1]]) warnPts.push(wx, top + 1, wz);
+  }
+}
+
+function flatBlock(gb, b, col) {
+  const h0 = BLOCK / 2;
+  gb.box(b.cx - h0, 0, b.cz - h0, b.cx + h0, 0.6, b.cz + h0, col, false, 0, 0, col);
+}
+
+function buildTarget(b) {
+  const g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); world.group.add(g);
+  const own = (o) => { world.disposables.push(o); return o; };
+  const mainMat = own(new THREE.MeshLambertMaterial({ color: 0x6d7064 }));
+  const main = new THREE.Mesh(own(new THREE.BoxGeometry(72, 34, 72).translate(0, 17, 0)), mainMat);
+  const upper = new THREE.Mesh(own(new THREE.BoxGeometry(34, 14, 34).translate(0, 7, 0)), mainMat);
+  upper.position.y = 34;
+  const bandMat = own(new THREE.MeshBasicMaterial({ color: 0xff3322 }));
+  const band = new THREE.Mesh(own(new THREE.BoxGeometry(72.8, 1.6, 72.8).translate(0, 30, 0)), bandMat);
+  const dome = new THREE.Mesh(own(new THREE.SphereGeometry(9, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2)), MAT.white);
+  dome.position.set(22, 34, 22);
+  const mast = new THREE.Mesh(own(new THREE.CylinderGeometry(1, 1.4, 14, 8).translate(0, 7, 0)), MAT.metal);
+  mast.position.set(-22, 34, -22);
+  const dishPivot = new THREE.Group(); dishPivot.position.set(-22, 50, -22);
+  const dish = new THREE.Mesh(own(new THREE.CylinderGeometry(10, 8, 1, 24).rotateX(Math.PI / 2 - 0.45)), MAT.white);
+  dishPivot.add(dish);
+  const ant = new THREE.Mesh(own(new THREE.CylinderGeometry(0.4, 0.8, 46, 6).translate(0, 23, 0)), MAT.metal);
+  ant.position.y = 48;
+  const beaconMat = own(new THREE.MeshBasicMaterial({ color: 0xff2200 }));
+  const beacon = new THREE.Mesh(GEO.lamp, beaconMat); beacon.scale.setScalar(1.6); beacon.position.y = 95;
+  const beamMat = own(new THREE.MeshBasicMaterial({
+    color: 0xff4a2a, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending,
+    depthWrite: false, fog: false, side: THREE.DoubleSide,
+  }));
+  const beam = new THREE.Mesh(own(new THREE.CylinderGeometry(3, 3, 1400, 12, 1, true).translate(0, 700, 0)), beamMat);
+  g.add(main, upper, band, dome, mast, dishPivot, ant, beacon, beam);
+  const s1 = addSolid({ x0: b.cx - 36, z0: b.cz - 36, x1: b.cx + 36, z1: b.cz + 36, h: 34 });
+  const s2 = addSolid({ x0: b.cx - 17, z0: b.cz - 17, x1: b.cx + 17, z1: b.cz + 17, h: 48 });
+  world.target = {
+    isTarget: true, alive: true, hp: 100, pos: V(b.cx, 0, b.cz), aim: V(b.cx, 52, b.cz),
+    g, main, mainMat, upper, band, dome, dishPivot, ant, beacon, beaconMat, beam, solids: [s1, s2], burnT: 0,
+  };
+}
+
+function buildLevel(level) {
+  if (world.group) { scene.remove(world.group); world.disposables.forEach((d) => d.dispose()); }
+  world.group = new THREE.Group(); scene.add(world.group);
+  world.disposables = []; world.buildings = []; world.grid = new Map(); world.maxH = 0; world.sites = [];
+  srand = mulberry32(level * 7919 + 1337);
+
+  // --- block layout ---
+  const blocks = [];
+  for (let i = 0; i < N_GEN; i++) for (let j = 0; j < N_GEN; j++) {
+    const cx = -GHALF + PITCH * (i + 0.5), cz = -GHALF + PITCH * (j + 0.5);
+    const inCity = Math.abs(cx) < HALF && Math.abs(cz) < HALF, r = Math.hypot(cx, cz) / HALF;
+    let type = inCity ? 'city' : 'suburb';
+    if (inCity) { const p = srand(); if (p < 0.05 + 0.07 * r) type = 'park'; else if (p < 0.08 + 0.09 * r) type = 'plaza'; }
+    blocks.push({ cx, cz, r, type, inCity });
+  }
+  world.spawn.set(PITCH * Math.round(sr(-4, 4)), 75, HALF + 300);
+  const sp = world.spawn;
+  const dSpawn = (b) => Math.hypot(b.cx - sp.x, b.cz - sp.z);
+
+  // --- objective: far side of the city ---
+  const cand = blocks.filter((b) => b.inCity && b.cz < -HALF * 0.3 && b.cz > -HALF + PITCH && Math.abs(b.cx) < HALF * 0.7);
+  const tb = cand[(srand() * cand.length) | 0];
+  tb.type = 'target';
+
+  // --- SAM sites: some ringed around the target, the rest spread out ---
+  const nSam = Math.min(14, 3 + 2 * level), nAaa = Math.min(26, 4 + 3 * level);
+  const samBlocks = [];
+  const nearT = shuffle(blocks.filter((b) => b !== tb && b.inCity && Math.abs(b.cx - tb.cx) <= PITCH * 2.1 && Math.abs(b.cz - tb.cz) <= PITCH * 2.1), srand);
+  const nNear = Math.min(nSam, 2 + Math.floor(level / 2));
+  for (let k = 0; k < nNear && k < nearT.length; k++) {
+    if (samBlocks.some((s) => Math.hypot(s.cx - nearT[k].cx, s.cz - nearT[k].cz) < 300)) continue;
+    nearT[k].type = 'sam'; samBlocks.push(nearT[k]);
+  }
+  const others = shuffle(blocks.filter((b) => b.inCity && (b.type === 'city' || b.type === 'park' || b.type === 'plaza') && dSpawn(b) > 950), srand);
+  while (samBlocks.length < nSam && others.length) {
+    const b = others.pop();
+    if (samBlocks.some((s) => Math.hypot(s.cx - b.cx, s.cz - b.cz) < 480)) continue;
+    b.type = 'sam'; samBlocks.push(b);
+  }
+
+  // --- geometry ---
+  const gb = new GeoBuilder(), warnPts = [];
+  for (const b of blocks) {
+    if (b.type === 'city' || b.type === 'suburb') genBuildingsInBlock(gb, b, warnPts);
+    else if (b.type === 'park') {
+      flatBlock(gb, b, [0.22, 0.4, 0.18]);
+      for (let k = 0; k < 16; k++) {
+        const s = sr(5, 9), th = sr(7, 14), tx = sr(b.cx - 58, b.cx + 58 - s), tz = sr(b.cz - 58, b.cz + 58 - s);
+        gb.box(tx, 0.6, tz, tx + s, th, tz + s, [0.12, 0.3, 0.12], false);
+        addSolid({ x0: tx, z0: tz, x1: tx + s, z1: tz + s, h: th });
+      }
+    } else flatBlock(gb, b, b.type === 'target' ? [0.42, 0.4, 0.36] : [0.55, 0.55, 0.55]);
+  }
+  const cityGeo = gb.build();
+  world.disposables.push(cityGeo);
+  world.group.add(new THREE.Mesh(cityGeo, cityMat));
+
+  world.warn = makeStaticPoints(warnPts, () => [1, 0.1, 0.05], 4.5, 1);
+  world.disposables.push(world.warn.geometry, world.warn.material);
+  pointMaterials.splice(pointMaterials.indexOf(world.warn.material), 1);
+  pointMaterials.push(world.warn.material);
+  world.group.add(world.warn);
+
+  buildTarget(tb);
+
+  // --- place SAMs ---
+  for (const b of samBlocks) {
+    const m = makeSAM();
+    m.g.position.set(b.cx, 0.6, b.cz); m.g.rotation.y = srand() * Math.PI * 2;
+    world.group.add(m.g);
+    world.sites.push({ type: 'sam', alive: true, pos: V(b.cx, 0.6, b.cz), aim: V(b.cx, 5, b.cz), ...m,
+      lock: 0, canSee: false, checkT: srand() * 0.2, cool: sr(1, 3), inFlight: 0, dist: 1e9 });
+  }
+
+  // --- place AAA: rooftops near the target first, then rooftops/intersections elsewhere ---
+  const roofs = world.buildings.filter((s) => s.roof && s.h >= 20 && s.h <= 150 && s.block && s.block.inCity &&
+    s.x1 - s.x0 > 26 && s.z1 - s.z0 > 26 && Math.hypot((s.x0 + s.x1) / 2 - sp.x, (s.z0 + s.z1) / 2 - sp.z) > 850);
+  shuffle(roofs, srand);
+  const spots = [];
+  const tooClose = (x, z, d) => spots.some((s) => Math.hypot(s.x - x, s.z - z) < d) || Math.hypot(x - tb.cx, z - tb.cz) < 60;
+  const nNearA = Math.ceil(nAaa * 0.4);
+  for (const s of roofs) {
+    if (spots.length >= nNearA) break;
+    const x = (s.x0 + s.x1) / 2, z = (s.z0 + s.z1) / 2;
+    if (Math.hypot(x - tb.cx, z - tb.cz) < 650 && !tooClose(x, z, 160)) spots.push({ x, z, y: s.h });
+  }
+  for (const s of roofs) {
+    if (spots.length >= nAaa) break;
+    const x = (s.x0 + s.x1) / 2, z = (s.z0 + s.z1) / 2;
+    if (!tooClose(x, z, 300)) spots.push({ x, z, y: s.h });
+  }
+  for (let tries = 0; spots.length < nAaa && tries < 400; tries++) {
+    const x = -HALF + PITCH * Math.round(sr(1, N_CITY - 1)), z = -HALF + PITCH * Math.round(sr(1, N_CITY - 1));
+    if (Math.hypot(x - sp.x, z - sp.z) > 850 && !tooClose(x, z, 300)) spots.push({ x, z, y: 0 });
+  }
+  for (const s of spots) {
+    const m = makeAAA();
+    m.g.position.set(s.x, s.y, s.z);
+    world.group.add(m.g);
+    world.sites.push({ type: 'aaa', alive: true, pos: V(s.x, s.y, s.z), aim: V(s.x, s.y + 3.2, s.z), ...m,
+      canSee: false, checkT: srand() * 0.2, shots: 0, burstCd: 1, dist: 1e9 });
+  }
+}
+
+// =====================================================================
+// Player aircraft
+// =====================================================================
+function buildJet() {
+  const g = new THREE.Group();
+  const body = new THREE.MeshLambertMaterial({ color: 0x6b7580 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x30353c });
+  const glass = new THREE.MeshLambertMaterial({ color: 0x0e1a28, emissive: 0x1d4a6e, emissiveIntensity: 0.6 });
+  const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  add(new THREE.CylinderGeometry(1.0, 1.35, 11, 12).rotateX(Math.PI / 2), body);
+  add(new THREE.ConeGeometry(1.35, 4.8, 12).rotateX(-Math.PI / 2), body, 0, 0, -7.9);
+  add(new THREE.SphereGeometry(1, 14, 10).scale(0.85, 0.75, 2.4), glass, 0, 1.0, -3.6);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.9, 1.2, 4.5), dark, s * 1.35, -0.35, -0.8);
+  const flat = (pts, depth) => {
+    const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+    return new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: false });
+  };
+  for (const s of [-1, 1]) {
+    add(flat([[s * 1, -2.5], [s * 7.5, 2.2], [s * 7.5, 3.4], [s * 1, 3.8]], 0.3).rotateX(Math.PI / 2), body, 0, -0.05, 0);
+    add(flat([[s * 0.8, 4.2], [s * 4.2, 5.9], [s * 4.2, 6.6], [s * 0.8, 6.6]], 0.2).rotateX(Math.PI / 2), body, 0, 0.1, 0);
+    const fin = add(flat([[2.6, 0], [5.8, 0], [6.4, 4.2], [5.0, 4.2]], 0.2).rotateY(-Math.PI / 2), body, s * 0.9, 0.7, 0);
+    fin.rotation.z = -s * 0.25;
+    add(new THREE.SphereGeometry(0.22, 6, 4), new THREE.MeshBasicMaterial({ color: s < 0 ? 0xff2020 : 0x20ff40 }), s * 7.5, -0.1, 2.8);
+  }
+  add(new THREE.CylinderGeometry(0.9, 1.05, 1.4, 12).rotateX(Math.PI / 2), dark, 0, 0, 6.2);
+  const abMat = new THREE.MeshBasicMaterial({ color: 0xff8a3a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+  const ab = add(new THREE.ConeGeometry(0.8, 5, 12, 1, true).rotateX(Math.PI / 2).translate(0, 0, 2.5), abMat, 0, 0, 6.9);
+  return { g, ab, abMat };
+}
+const jet = buildJet();
+scene.add(jet.g);
+const shadow = new THREE.Mesh(
+  new THREE.PlaneGeometry(17, 14).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ map: makeBlobTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+);
+scene.add(shadow);
+
+const P = {
+  pos: V(), vel: V(), fwd: V(0, 0, -1), right: V(1, 0, 0), yaw: 0, pitch: 0, roll: 0, yawRate: 0, speed: 125,
+  hull: 100, missiles: 8, flares: 16, boost: 1, boostLock: false, boosting: false, alive: true,
+  fireCd: 0, flareCd: 0, pylon: 1, lockObj: null, lockT: 0, locked: false, lockScan: 0, pullUp: false,
+};
+
+// =====================================================================
+// Game state, entities
+// =====================================================================
+const state = {
+  mode: 'title', level: 1, score: 0, levelStartScore: 0, time: 0, missionT: 0, camMode: 0, invert: false,
+  shake: 0, dmgFlash: 0, oobT: 0, endT: 0, timers: [], kills: { sam: 0, aaa: 0 }, damageTaken: 0, lowT: 0, win: false, reason: '',
+};
+const missiles = [], shells = [], flares = [];
+const missileGeo = new THREE.CylinderGeometry(0.25, 0.32, 3.8, 6).rotateX(Math.PI / 2);
+const missileMatE = new THREE.MeshLambertMaterial({ color: 0xe4e4e4 });
+const missileMatP = new THREE.MeshLambertMaterial({ color: 0x9aa3ad });
+const tmp = V(), tmp2 = V(), aimV = V();
+
+function later(t, fn) { state.timers.push({ t, fn }); }
+
+// =====================================================================
+// Audio (all synthesised, no assets)
+// =====================================================================
+const audio = {
+  ctx: null, muted: false,
+  init() {
+    if (this.ctx) { this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = (this.ctx = new AC());
+    this.master = ctx.createGain(); this.master.gain.value = this.muted ? 0 : 0.5; this.master.connect(ctx.destination);
+    const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.noise = buf;
+    const n = ctx.createBufferSource(); n.buffer = buf; n.loop = true;
+    this.engF = ctx.createBiquadFilter(); this.engF.type = 'lowpass'; this.engF.frequency.value = 500;
+    this.engG = ctx.createGain(); this.engG.gain.value = 0;
+    this.engO = ctx.createOscillator(); this.engO.type = 'sawtooth'; this.engO.frequency.value = 55;
+    const og = ctx.createGain(); og.gain.value = 0.05;
+    n.connect(this.engF); this.engO.connect(og); og.connect(this.engF); this.engF.connect(this.engG); this.engG.connect(this.master);
+    n.start(); this.engO.start();
+  },
+  engine(f, boost, on) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.engF.frequency.setTargetAtTime(280 + f * 900 + (boost ? 1100 : 0), t, 0.15);
+    this.engG.gain.setTargetAtTime(on ? 0.16 + f * 0.1 + (boost ? 0.12 : 0) : 0, t, 0.25);
+    this.engO.frequency.setTargetAtTime(45 + f * 40, t, 0.2);
+  },
+  beep(freq, dur = 0.07, vol = 0.07, type = 'square') {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.02);
+  },
+  burst(vol, dur, f0, f1, type = 'lowpass') {
+    if (!this.ctx || vol < 0.01) return;
+    const c = this.ctx, t = c.currentTime, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = this.noise; f.type = type;
+    f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master);
+    s.start(t, Math.random() * 0.3); s.stop(t + dur + 0.05);
+  },
+  distVol(d, range = 2200) { return Math.pow(clamp(1 - d / range, 0, 1), 1.6); },
+  boom(d, big = 1) { this.burst(this.distVol(d) * 0.9 * Math.min(1.4, big), 0.8 + big * 0.6, 1300, 45); },
+  launch(d = 0) { this.burst(0.35 * this.distVol(d, 1800), 0.9, 2800, 250, 'bandpass'); },
+  flak(d) { this.burst(this.distVol(d, 1200) * 0.45, 0.35, 1800, 120); },
+  setMuted(m) { this.muted = m; if (this.master) this.master.gain.value = m ? 0 : 0.5; },
+};
+
+// =====================================================================
+// Effects
+// =====================================================================
+function explode(pos, size = 1) {
+  const n = Math.round(30 * size);
+  for (let i = 0; i < n; i++) {
+    randUnit(tmp); const sp = rnd(8, 45) * size;
+    fx.spawn(pos.x, pos.y, pos.z, tmp.x * sp, tmp.y * sp, tmp.z * sp, rnd(0.35, 0.9), 1, rnd(0.45, 0.8), rnd(0.1, 0.3), rnd(6, 12) * size, rnd(14, 26) * size, 0.75, 2.5, 0);
+  }
+  for (let i = 0; i < 18 * size; i++) {
+    randUnit(tmp); const sp = rnd(40, 120);
+    fx.spawn(pos.x, pos.y, pos.z, tmp.x * sp, tmp.y * sp + 20, tmp.z * sp, rnd(0.4, 1.1), 1, 0.85, 0.55, rnd(1.5, 2.5), 0.8, 1, 1.2, 30);
+  }
+  for (let i = 0; i < 16 * size; i++) {
+    randUnit(tmp); const sp = rnd(3, 15) * size, gr = rnd(0.12, 0.25);
+    smoke.spawn(pos.x, pos.y, pos.z, tmp.x * sp, tmp.y * sp, tmp.z * sp, rnd(2, 4.5), gr, gr * 0.95, gr * 0.9, 8 * size, 35 * size, 0.55, 1.5, -3);
+  }
+  flash(pos, 3 + 2 * size);
+  const d = pos.distanceTo(camera.position);
+  audio.boom(d, size);
+  state.shake = Math.min(1.5, state.shake + Math.max(0, 1 - d / 300) * size);
+}
+function flakBurst(pos) {
+  for (let i = 0; i < 7; i++) {
+    randUnit(tmp); const sp = rnd(2, 9);
+    smoke.spawn(pos.x, pos.y, pos.z, tmp.x * sp, tmp.y * sp, tmp.z * sp, rnd(1.8, 3), 0.16, 0.15, 0.14, 6, 24, 0.65, 1.2, -1);
+  }
+  fx.spawn(pos.x, pos.y, pos.z, 0, 0, 0, 0.14, 1, 0.75, 0.4, 20, 8, 1);
+  for (let i = 0; i < 8; i++) { randUnit(tmp); const sp = rnd(30, 70); fx.spawn(pos.x, pos.y, pos.z, tmp.x * sp, tmp.y * sp, tmp.z * sp, rnd(0.2, 0.45), 1, 0.8, 0.45, 2, 0.8, 1, 1, 10); }
+  const d = pos.distanceTo(camera.position);
+  audio.flak(d);
+  state.shake = Math.min(1.5, state.shake + Math.max(0, 1 - d / 120) * 0.5);
+}
+
+// Toast
+const toastEl = document.getElementById('toast');
+let toastT = 0;
+function toast(msg, color = '') {
+  toastEl.textContent = msg; toastEl.style.color = color; toastEl.classList.add('on'); toastT = 2.4;
+}
+
+// =====================================================================
+// Weapons
+// =====================================================================
+function spawnMissile(o) {
+  o.mesh = new THREE.Mesh(missileGeo, o.enemy ? missileMatE : missileMatP);
+  o.mesh.position.copy(o.pos);
+  scene.add(o.mesh);
+  o.boostT = o.boostT || 0; o.losT = 0; o.lostT = 0; o.hasLos = true; o.trailT = 0;
+  missiles.push(o);
+}
+function removeMissile(i) {
+  const m = missiles[i];
+  scene.remove(m.mesh);
+  if (m.site) m.site.inFlight--;
+  missiles.splice(i, 1);
+}
+function fireMissile() {
+  if (!P.alive || P.fireCd > 0) return;
+  if (P.missiles <= 0) { toast('WINCHESTER — NO MISSILES', 'var(--amber)'); return; }
+  P.missiles--; P.fireCd = 0.35; P.pylon = -P.pylon;
+  const pos = P.pos.clone().addScaledVector(P.right, 2.6 * P.pylon).add(V(0, -1.2, 0)).addScaledVector(P.fwd, 2);
+  spawnMissile({ pos, dir: P.fwd.clone(), speed: P.speed + 20, maxSpeed: 440, turn: 3.4,
+    target: P.locked ? P.lockObj : null, enemy: false, life: 7 });
+  audio.launch(0);
+}
+function dropFlares() {
+  if (!P.alive || P.flares <= 0 || P.flareCd > 0) return;
+  P.flares--; P.flareCd = 0.45;
+  const made = [];
+  for (const s of [-1, 1]) {
+    const f = { isFlare: true, pos: P.pos.clone(), vel: P.vel.clone().multiplyScalar(0.35).addScaledVector(P.right, s * 26).add(V(0, -8, 0)), life: 3.2 };
+    flares.push(f); made.push(f);
+  }
+  let decoyed = 0;
+  for (const m of missiles) {
+    if (m.enemy && m.target === 'player' && Math.random() < 0.72) { m.target = made[(Math.random() * 2) | 0]; m.lostT = 0; decoyed++; }
+  }
+  if (decoyed) toast(decoyed > 1 ? `${decoyed} MISSILES DECOYED` : 'MISSILE DECOYED');
+  audio.burst(0.22, 0.3, 4000, 1500, 'highpass');
+}
+function steer(dir, want, maxAng) {
+  const ang = Math.acos(clamp(dir.dot(want), -1, 1));
+  if (ang < 1e-4) return;
+  dir.lerp(want, Math.min(1, maxAng / ang)).normalize();
+}
+
+function damagePlayer(amount) {
+  if (!P.alive || (state.mode !== 'play' && state.mode !== 'winning')) return;
+  P.hull -= amount; state.damageTaken += amount;
+  state.dmgFlash = Math.min(1, state.dmgFlash + amount / 40);
+  state.shake = Math.min(1.5, state.shake + amount / 30);
+  audio.burst(0.3, 0.25, 900, 200);
+  if (P.hull <= 0) { P.hull = 0; killPlayer('Your aircraft was shot down.'); }
+}
+function killPlayer(reason) {
+  if (!P.alive) return;
+  P.alive = false;
+  explode(P.pos, 2.2);
+  later(0.25, () => explode(P.pos.clone().add(V(rnd(-8, 8), rnd(0, 6), rnd(-8, 8))), 1.2));
+  jet.g.visible = false; shadow.visible = false;
+  state.reason = reason;
+  state.mode = 'dying'; state.endT = 2.6;
+  audio.engine(0, false, false);
+}
+
+function destroySite(s) {
+  if (!s.alive) return;
+  s.alive = false;
+  explode(s.aim, 1.3);
+  s.turret.visible = false; s.base.material = MAT.wreck;
+  if (s.type === 'sam') { state.score += 200; state.kills.sam++; toast('SAM SITE DESTROYED  +200'); }
+  else { state.score += 100; state.kills.aaa++; toast('FLAK GUN DESTROYED  +100'); }
+  if (P.lockObj === s) { P.lockObj = null; P.locked = false; }
+}
+function playerExplosion(pos) {
+  for (const s of world.sites) if (s.alive && s.aim.distanceTo(pos) < 30) destroySite(s);
+  const T = world.target;
+  if (T.alive && Math.abs(pos.x - T.pos.x) < 56 && Math.abs(pos.z - T.pos.z) < 56 && pos.y < 64) {
+    T.hp -= 34;
+    flash(pos, 6);
+    if (T.hp <= 0) destroyTarget();
+    else toast(`DIRECT HIT — TARGET ${Math.max(0, T.hp)}%`, '#ffe066');
+  }
+}
+function destroyTarget() {
+  const T = world.target;
+  T.alive = false; T.hp = 0;
+  state.score += 1000;
+  toast('TARGET DESTROYED', '#ffe066');
+  for (let i = 0; i < 9; i++) {
+    later(i * 0.22, () => explode(T.pos.clone().add(V(rnd(-30, 30), rnd(10, 50), rnd(-30, 30))), rnd(1.4, 2.6)));
+  }
+  later(0.9, () => {
+    T.main.scale.y = 0.38; T.mainMat.color.set(0x1b1a18);
+    T.upper.visible = T.dome.visible = T.dishPivot.visible = T.ant.visible = T.beacon.visible = T.band.visible = false;
+    T.solids[0].h = 34 * 0.38; T.solids[1].h = 34 * 0.38;
+  });
+  T.beam.visible = false;
+  if (P.lockObj === T) { P.lockObj = null; P.locked = false; }
+  if (state.mode === 'play') { state.mode = 'winning'; state.endT = 4.5; }
+}
+
+// =====================================================================
+// Mission flow
+// =====================================================================
+const el = (id) => document.getElementById(id);
+function showScreen(id) { for (const s of ['title', 'pause', 'end']) el(s).classList.toggle('hidden', s !== id); }
+
+function startMission(level) {
+  audio.init();
+  state.level = level;
+  buildLevel(level);
+  for (let i = missiles.length - 1; i >= 0; i--) removeMissile(i);
+  shells.length = 0; flares.length = 0; state.timers.length = 0;
+  fx.clear(); smoke.clear();
+  Object.assign(P, { yaw: 0, pitch: 0, roll: 0, yawRate: 0, speed: 128, hull: 100, missiles: 8, flares: 16, boost: 1,
+    boostLock: false, alive: true, fireCd: 0, flareCd: 0, lockObj: null, lockT: 0, locked: false, pullUp: false });
+  P.pos.copy(world.spawn); P.fwd.set(0, 0, -1); P.vel.set(0, 0, -P.speed);
+  jet.g.visible = true; shadow.visible = true;
+  Object.assign(state, { mode: 'play', missionT: 0, oobT: 0, kills: { sam: 0, aaa: 0 }, damageTaken: 0, lowT: 0, shake: 0, dmgFlash: 0 });
+  state.levelStartScore = state.score;
+  camera.position.copy(P.pos).add(V(0, 10, 40));
+  el('hMission').textContent = `MISSION ${level}`;
+  el('hud').classList.remove('hidden');
+  showScreen(null);
+  toast(`MISSION ${level}: FOLLOW THE BEACON. STAY LOW.`);
+}
+
+function endMission(win) {
+  state.mode = 'over'; state.win = win;
+  const T = world.target, sams = world.sites.filter((s) => s.type === 'sam').length, aaas = world.sites.length - sams;
+  let bonus = 0;
+  if (win) {
+    bonus = Math.round(Math.max(0, 900 - state.missionT * 6) + P.hull * 6);
+    state.score += bonus;
+  }
+  el('endTitle').textContent = win ? 'MISSION COMPLETE' : 'MISSION FAILED';
+  el('endTitle').className = win ? '' : 'fail';
+  el('endReason').textContent = win ? 'Command center destroyed. Good flying.' : state.reason;
+  const rows = [
+    ['Mission', state.level], ['Time', `${state.missionT.toFixed(1)} s`],
+    ['Target', T.alive ? `${T.hp}% intact` : 'destroyed'],
+    ['SAM sites destroyed', `${state.kills.sam} / ${sams}`], ['Flak guns destroyed', `${state.kills.aaa} / ${aaas}`],
+    ['Hull', `${Math.max(0, Math.round(P.hull))}%`], ['Low-level time', `${state.lowT.toFixed(0)} s`],
+  ];
+  if (win) rows.push(['Bonus', `+${bonus}`]);
+  rows.push(['Score', state.score]);
+  el('endStats').innerHTML = rows.map(([a, b]) => `<div class="dim">${a}</div><div>${b}</div>`).join('');
+  el('btnPrimary').textContent = win ? `NEXT MISSION (${state.level + 1})` : 'RETRY MISSION';
+  el('btnSecondary').textContent = win ? 'REPLAY MISSION' : 'RESTART FROM MISSION 1';
+  showScreen('end');
+  audio.engine(0, false, !!P.alive);
+}
+el('btnPrimary').onclick = () => {
+  if (state.win) startMission(state.level + 1);
+  else { state.score = state.levelStartScore; startMission(state.level); }
+};
+el('btnSecondary').onclick = () => {
+  if (state.win) { state.score = state.levelStartScore; startMission(state.level); }
+  else { state.score = 0; startMission(1); }
+};
+el('btnStart').onclick = () => { state.score = 0; startMission(1); };
+el('btnResume').onclick = () => pause(false);
+el('btnAbort').onclick = () => { state.score = state.levelStartScore; startMission(state.level); };
+
+function pause(on) {
+  if (on && (state.mode === 'play' || state.mode === 'winning')) {
+    state.prevMode = state.mode; state.mode = 'paused'; showScreen('pause'); audio.engine(0, false, false);
+    if (audio.ctx) audio.ctx.suspend();
+  } else if (!on && state.mode === 'paused') {
+    state.mode = state.prevMode; showScreen(null);
+    if (audio.ctx) audio.ctx.resume();
+  }
+}
+
+// =====================================================================
+// Input
+// =====================================================================
+const keys = {};
+addEventListener('keydown', (e) => {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  keys[e.code] = true;
+  if (e.repeat) return;
+  const flying = state.mode === 'play' || state.mode === 'winning';
+  if (flying) {
+    if (e.code === 'Space') fireMissile();
+    if (e.code === 'KeyF') dropFlares();
+    if (e.code === 'KeyC') state.camMode ^= 1;
+    if (e.code === 'KeyP' || e.code === 'Escape') pause(true);
+  } else if (state.mode === 'paused' && (e.code === 'KeyP' || e.code === 'Escape')) pause(false);
+  if (e.code === 'KeyM') { audio.setMuted(!audio.muted); toast(audio.muted ? 'SOUND OFF' : 'SOUND ON'); }
+  if (e.code === 'KeyI') { state.invert = !state.invert; toast(state.invert ? 'PITCH INVERTED (W = DIVE)' : 'PITCH NORMAL (W = CLIMB)'); }
+  if (e.code === 'Enter') {
+    if (state.mode === 'title') el('btnStart').click();
+    else if (state.mode === 'over') el('btnPrimary').click();
+  }
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; pause(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); });
+
+// =====================================================================
+// Simulation
+// =====================================================================
+function updatePlayer(dt) {
+  const k = keys;
+  const turnIn = (k.KeyA || k.ArrowLeft ? 1 : 0) - (k.KeyD || k.ArrowRight ? 1 : 0);
+  let pitchIn = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0);
+  if (state.invert) pitchIn = -pitchIn;
+  if (P.boost <= 0.01) P.boostLock = true;
+  if (P.boostLock && P.boost > 0.3) P.boostLock = false;
+  P.boosting = !!(k.ShiftLeft || k.ShiftRight) && !P.boostLock;
+  const braking = !!k.KeyX;
+  P.boost = P.boosting ? Math.max(0, P.boost - dt * 0.2) : Math.min(1, P.boost + dt * 0.1);
+  const tgt = P.boosting ? 195 : braking ? 78 : 128;
+  P.speed += (tgt - P.speed) * Math.min(1, dt * (P.boosting ? 1.1 : 0.9));
+  P.speed -= Math.sin(P.pitch) * 6 * dt;
+
+  const maxYaw = braking ? 1.55 : P.boosting ? 1.05 : 1.3;
+  P.yawRate += (turnIn * maxYaw - P.yawRate) * Math.min(1, dt * 4.5);
+  P.yaw += P.yawRate * dt;
+  if (pitchIn) P.pitch += pitchIn * 1.15 * dt; else P.pitch -= P.pitch * Math.min(1, dt * 1.4);
+  P.pitch = clamp(P.pitch, -1.0, 1.0);
+  if (P.pos.y > 760 && P.pitch > 0) P.pitch -= dt * 1.5;
+  P.roll += (P.yawRate * 0.85 - P.roll) * Math.min(1, dt * 6);
+
+  const cp = Math.cos(P.pitch);
+  P.fwd.set(-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp);
+  P.right.set(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
+  P.vel.copy(P.fwd).multiplyScalar(P.speed);
+  P.pos.addScaledVector(P.vel, dt);
+  P.fireCd -= dt; P.flareCd -= dt;
+
+  // Collision: centre, nose and both wingtips
+  const cr = Math.cos(P.roll) * 6, srl = Math.sin(P.roll) * 6;
+  const probes = [
+    [P.pos.x, P.pos.y, P.pos.z],
+    [P.pos.x + P.fwd.x * 8, P.pos.y + P.fwd.y * 8, P.pos.z + P.fwd.z * 8],
+    [P.pos.x + P.right.x * cr, P.pos.y + srl, P.pos.z + P.right.z * cr],
+    [P.pos.x - P.right.x * cr, P.pos.y - srl, P.pos.z - P.right.z * cr],
+  ];
+  for (const [x, y, z] of probes) {
+    if (y < 1.2 || solidAt(x, y, z)) { killPlayer(y < 3 ? 'You flew into the ground.' : 'You crashed into a building.'); return; }
+  }
+  P.pullUp = false;
+  for (let t = 0.15; t <= 1.35; t += 0.15) {
+    if (solidAt(P.pos.x + P.vel.x * t, P.pos.y + P.vel.y * t, P.pos.z + P.vel.z * t)) { P.pullUp = true; break; }
+  }
+
+  // Area of operations
+  if (Math.max(Math.abs(P.pos.x), Math.abs(P.pos.z)) > AO_LIMIT) {
+    state.oobT += dt;
+    if (state.oobT > 8) { killPlayer('You left the area of operations. Mission aborted.'); return; }
+  } else state.oobT = 0;
+
+  if (P.pos.y < 50 && Math.abs(P.pos.x) < HALF && Math.abs(P.pos.z) < HALF) {
+    state.lowT += dt; state.lowAcc = (state.lowAcc || 0) + dt * 12;
+    if (state.lowAcc >= 1) { const w = Math.floor(state.lowAcc); state.score += w; state.lowAcc -= w; }
+  }
+
+  // Engine visuals
+  jet.ab.scale.set(1, 1, P.boosting ? rnd(1.5, 1.9) : rnd(0.45, 0.6));
+  jet.abMat.color.setHex(P.boosting ? 0xff9a4a : 0xff6a2a);
+  tmp.copy(P.pos).addScaledVector(P.fwd, -8);
+  if (P.boosting) fx.spawn(tmp.x, tmp.y, tmp.z, -P.fwd.x * 20, -P.fwd.y * 20, -P.fwd.z * 20, 0.12, 1, 0.55, 0.2, 3, 1, 0.8);
+  if (P.hull < 45 && Math.random() < 0.6) {
+    const gr = 0.15 + Math.random() * 0.1;
+    smoke.spawn(tmp.x, tmp.y, tmp.z, rnd(-2, 2), rnd(0, 3), rnd(-2, 2), rnd(1.5, 2.5), gr, gr, gr, 2, 10, P.hull < 25 ? 0.7 : 0.4, 0.6, -2);
+    if (P.hull < 25 && Math.random() < 0.5) fx.spawn(tmp.x, tmp.y, tmp.z, 0, 0, 0, 0.15, 1, 0.5, 0.15, 3, 1, 1);
+  }
+}
+
+function placeJet() {
+  jet.g.position.copy(P.pos);
+  jet.g.rotation.set(P.pitch, P.yaw, P.roll, 'YXZ');
+  const h = heightAt(P.pos.x, P.pos.z), alt = P.pos.y - h;
+  shadow.position.set(P.pos.x, h + 0.8, P.pos.z);
+  shadow.rotation.y = P.yaw;
+  shadow.material.opacity = clamp(1 - alt / 140, 0, 1) * 0.9;
+  shadow.scale.setScalar(1 + alt / 120);
+}
+
+function updateLock(dt) {
+  P.lockScan -= dt;
+  if (P.lockScan <= 0) {
+    P.lockScan = 0.1;
+    let best = null, bestA = 0.36;
+    const T = world.target;
+    const cands = T.alive ? [T] : [];
+    for (const s of world.sites) if (s.alive) cands.push(s);
+    for (const c of cands) {
+      tmp.subVectors(c.aim, P.pos);
+      const d = tmp.length();
+      if (d > LOCK_RANGE || d < 40) continue;
+      const a = Math.acos(clamp(tmp.dot(P.fwd) / d, -1, 1)) - (c === T ? 0.08 : 0);
+      if (a < bestA && los(P.pos, c.aim)) { bestA = a; best = c; }
+    }
+    if (best !== P.lockObj) { P.lockObj = best; P.lockT = 0; P.locked = false; }
+  }
+  if (P.lockObj) {
+    P.lockT += dt;
+    if (!P.locked && P.lockT > 0.55) { P.locked = true; audio.beep(1900, 0.08, 0.05); later(0.1, () => audio.beep(1900, 0.08, 0.05)); }
+  }
+}
+
+function updateSites(dt) {
+  const L = state.level;
+  const lockTime = Math.max(1.3, 2.6 - 0.18 * L);
+  const hostile = state.mode === 'play' && P.alive;
+  for (const s of world.sites) {
+    if (!s.alive) {
+      if (Math.random() < dt * 6) smoke.spawn(s.aim.x, s.aim.y, s.aim.z, rnd(-1, 1), rnd(6, 10), rnd(-1, 1), rnd(3, 5), 0.12, 0.12, 0.12, 5, 26, 0.5, 0.2, 0);
+      continue;
+    }
+    s.checkT -= dt;
+    if (s.checkT <= 0) {
+      s.checkT = 0.12 + Math.random() * 0.08;
+      s.dist = s.aim.distanceTo(P.pos);
+      s.canSee = hostile && s.dist < (s.type === 'sam' ? SAM_RANGE : AAA_RANGE) && los(s.aim, P.pos);
+    }
+    if (s.canSee) {
+      tmp.subVectors(P.pos, s.aim);
+      s.turret.rotation.y = lerpAngle(s.turret.rotation.y, Math.atan2(-tmp.x, -tmp.z) - s.g.rotation.y, Math.min(1, dt * 4));
+      if (s.type === 'aaa') s.pivot.rotation.x = Math.atan2(tmp.y, Math.hypot(tmp.x, tmp.z));
+    }
+    if (s.type === 'sam') updateSAM(s, dt, lockTime, L); else updateAAA(s, dt, L);
+  }
+}
+function updateSAM(s, dt, lockTime, L) {
+  const clutter = P.pos.y < LOW_ALT ? 0.5 : 1;
+  if (s.canSee) s.lock = Math.min(1, s.lock + (dt / lockTime) * clutter);
+  else s.lock = Math.max(0, s.lock - dt * 0.5);
+  s.cool -= dt;
+  const blink = (state.time * (2 + s.lock * 8)) % 1 < 0.5;
+  s.lightMat.color.setRGB(s.canSee ? (blink ? 1 : 0.3) : 0.25, s.canSee ? 0.05 : 0.02, 0.02);
+  if (s.lock >= 1 && s.cool <= 0 && s.inFlight < (L >= 3 ? 2 : 1)) {
+    tmp.subVectors(P.pos, s.aim).setY(0).normalize().multiplyScalar(0.55).add(UP).normalize();
+    spawnMissile({ pos: s.aim.clone().add(V(0, 3, 0)), dir: tmp.clone(), speed: 50, maxSpeed: 290 + 12 * L,
+      turn: 1.55 + 0.13 * L, target: 'player', enemy: true, life: 10, boostT: 0.45, site: s });
+    s.inFlight++; s.cool = rnd(5, 7.5); s.lock = 0.4;
+    for (let i = 0; i < 14; i++) smoke.spawn(s.aim.x, s.aim.y, s.aim.z, rnd(-12, 12), rnd(0, 6), rnd(-12, 12), rnd(2, 3.5), 0.8, 0.78, 0.75, 6, 22, 0.45, 1.5, -1);
+    audio.launch(s.dist);
+  }
+}
+function updateAAA(s, dt, L) {
+  s.lightMat.color.setRGB(s.canSee ? 1 : 0.2, s.canSee ? 0.55 : 0.1, 0);
+  if (!s.canSee) { s.shots = 0; s.burstCd = Math.max(s.burstCd, 0.7); return; }
+  s.burstCd -= dt;
+  if (s.burstCd > 0) return;
+  if (s.shots > 0) { fireShell(s, L); s.shots--; s.burstCd = 0.1; }
+  else { s.shots = 6 + Math.floor(L / 2); s.burstCd = rnd(1.1, 1.9); }
+}
+const SHELL_SPEED = 520;
+function fireShell(s, L) {
+  const m = s.aim;
+  let t = m.distanceTo(P.pos) / SHELL_SPEED;
+  for (let k = 0; k < 2; k++) { tmp.copy(P.pos).addScaledVector(P.vel, t); t = m.distanceTo(tmp) / SHELL_SPEED; }
+  tmp.copy(P.pos).addScaledVector(P.vel, t);
+  const err = m.distanceTo(tmp) * Math.max(0.014, 0.046 - 0.004 * L);
+  tmp.x += (Math.random() + Math.random() - 1) * err * 1.6;
+  tmp.y += (Math.random() + Math.random() - 1) * err * 1.6;
+  tmp.z += (Math.random() + Math.random() - 1) * err * 1.6;
+  const dir = tmp.sub(m).normalize();
+  shells.push({ pos: m.clone().addScaledVector(dir, 4), vel: dir.clone().multiplyScalar(SHELL_SPEED), fuse: t + rnd(-0.06, 0.06) });
+  fx.spawn(m.x + dir.x * 5, m.y + dir.y * 5, m.z + dir.z * 5, 0, 0, 0, 0.06, 1, 0.8, 0.4, 7, 3, 1);
+  if (s.dist < 900 && Math.random() < 0.5) audio.burst(audio.distVol(s.dist, 900) * 0.18, 0.08, 1500, 300);
+}
+
+function updateMissiles(dt) {
+  for (let i = missiles.length - 1; i >= 0; i--) {
+    const m = missiles[i];
+    m.life -= dt;
+    let tpos = null, tvel = ZERO;
+    if (m.target === 'player') { if (P.alive) { tpos = P.pos; tvel = P.vel; } else m.target = null; }
+    else if (m.target && m.target.isFlare) { if (m.target.life > 0) { tpos = m.target.pos; tvel = m.target.vel; } else m.target = null; }
+    else if (m.target) { if (m.target.alive) tpos = m.target.aim; else m.target = null; }
+
+    if (m.boostT > 0) m.boostT -= dt;
+    else if (tpos) {
+      if (m.enemy) {                                 // seeker needs line of sight
+        m.losT -= dt;
+        if (m.losT <= 0) { m.losT = 0.2; m.hasLos = los(m.pos, tpos); }
+        if (!m.hasLos) {
+          m.lostT += dt;
+          if (m.lostT > 0.9) { if (m.target === 'player') toast('MISSILE LOST TRACK'); m.target = null; tpos = null; }
+        } else m.lostT = 0;
+      }
+      if (tpos) {
+        const d = tmp.subVectors(tpos, m.pos).length(), tgo = d / Math.max(m.speed, 1);
+        aimV.copy(tpos).addScaledVector(tvel, tgo * (m.enemy ? 0.65 : 0.5)).sub(m.pos).normalize();
+        steer(m.dir, aimV, m.turn * dt);
+      }
+    }
+    m.speed = Math.min(m.maxSpeed, m.speed + (m.enemy ? 420 : 520) * dt);
+    const px = m.pos.x, py = m.pos.y, pz = m.pos.z;
+    m.pos.addScaledVector(m.dir, m.speed * dt);
+    m.mesh.position.copy(m.pos);
+    m.mesh.quaternion.setFromUnitVectors(Z_NEG, m.dir);
+
+    // exhaust flame + smoke trail
+    const tx = m.pos.x - m.dir.x * 2.2, ty = m.pos.y - m.dir.y * 2.2, tz = m.pos.z - m.dir.z * 2.2;
+    fx.spawn(tx, ty, tz, 0, 0, 0, 0.05, 1, m.enemy ? 0.7 : 0.85, m.enemy ? 0.35 : 0.6, m.enemy ? 6 : 4.5, 2, 1);
+    for (let s = 0; s < 2; s++) {
+      const f = s * 0.5;
+      smoke.spawn(px + (tx - px) * f, py + (ty - py) * f, pz + (tz - pz) * f, rnd(-1, 1), rnd(-1, 1), rnd(-1, 1),
+        rnd(1.8, 3), 0.82, 0.82, 0.84, 2, m.enemy ? 13 : 9, m.enemy ? 0.32 : 0.25, 0.5, -1);
+    }
+
+    let boom = solidAt(m.pos.x, m.pos.y, m.pos.z) || m.life <= 0, hitPlayer = false;
+    if (m.enemy && P.alive) {
+      const dp = m.pos.distanceTo(P.pos);
+      if (dp < (m.target === 'player' ? 13 : 9)) { boom = true; hitPlayer = true; }
+    }
+    if (!m.enemy && tpos && m.pos.distanceTo(tpos) < 8) boom = true;
+    if (m.target && m.target.isFlare && m.pos.distanceTo(m.target.pos) < 8) boom = true;
+    if (boom) {
+      explode(m.pos, m.enemy ? 0.9 : 1);
+      if (m.enemy) {
+        const dp = m.pos.distanceTo(P.pos);
+        if (hitPlayer) { damagePlayer(42); toast('HIT BY MISSILE', 'var(--red)'); }
+        else if (dp < 26) damagePlayer(30 * (1 - dp / 26));
+      } else playerExplosion(m.pos);
+      removeMissile(i);
+    }
+  }
+}
+
+function updateShells(dt) {
+  for (let i = shells.length - 1; i >= 0; i--) {
+    const s = shells[i];
+    s.fuse -= dt;
+    s.pos.addScaledVector(s.vel, dt);
+    fx.spawn(s.pos.x, s.pos.y, s.pos.z, 0, 0, 0, 0.07, 1, 0.72, 0.32, 3.2, 1.6, 1);
+    if (solidAt(s.pos.x, s.pos.y, s.pos.z)) { shells.splice(i, 1); continue; }
+    if (s.fuse <= 0) {
+      flakBurst(s.pos);
+      const d = s.pos.distanceTo(P.pos);
+      if (d < 24) damagePlayer(4 + 9 * (1 - d / 24));
+      shells.splice(i, 1);
+    }
+  }
+}
+
+function updateFlares(dt) {
+  for (let i = flares.length - 1; i >= 0; i--) {
+    const f = flares[i];
+    f.life -= dt;
+    f.vel.y -= 9.8 * dt * 0.6; f.vel.multiplyScalar(1 - dt * 0.8);
+    f.pos.addScaledVector(f.vel, dt);
+    fx.spawn(f.pos.x, f.pos.y, f.pos.z, 0, 0, 0, 0.1, 1, 0.95, 0.75, 10, 3, 1);
+    smoke.spawn(f.pos.x, f.pos.y, f.pos.z, rnd(-1, 1), rnd(-1, 1), rnd(-1, 1), 1.6, 0.9, 0.9, 0.9, 2, 8, 0.25, 0.5, -1);
+    if (f.life <= 0 || f.pos.y < 1) flares.splice(i, 1);
+  }
+}
+
+function updateTarget(dt) {
+  const T = world.target;
+  if (!T) return;
+  T.dishPivot.rotation.y += dt * 0.9;
+  const on = (state.time % 1.2) < 0.25;
+  T.beaconMat.color.setHex(on ? 0xff3010 : 0x330800);
+  T.beam.material.opacity = 0.22 + Math.sin(state.time * 3) * 0.06;
+  if (!T.alive) {
+    T.burnT += dt;
+    if (Math.random() < dt * 25) {
+      fx.spawn(T.pos.x + rnd(-30, 30), 14, T.pos.z + rnd(-30, 30), rnd(-2, 2), rnd(6, 14), rnd(-2, 2), rnd(0.6, 1.2), 1, rnd(0.4, 0.7), 0.15, rnd(10, 18), 4, 1);
+    }
+    if (Math.random() < dt * 14) {
+      const g = rnd(0.08, 0.16);
+      smoke.spawn(T.pos.x + rnd(-25, 25), 18, T.pos.z + rnd(-25, 25), rnd(-2, 2), rnd(10, 18), rnd(-2, 2), rnd(5, 8), g, g, g, 14, 70, 0.6, 0.1, 0);
+    }
+  }
+}
+
+// =====================================================================
+// Camera
+// =====================================================================
+const camWant = V(), camLook = V();
+function updateCamera(dt) {
+  if (state.mode === 'title') {
+    const a = state.time * 0.045;
+    camera.position.set(Math.sin(a) * 1500, 420, Math.cos(a) * 1500);
+    camera.lookAt(0, 60, 0);
+  } else if (!P.alive) {
+    const a = state.time * 0.35;
+    camWant.set(P.pos.x + Math.sin(a) * 110, Math.max(P.pos.y, heightAt(P.pos.x, P.pos.z)) + 55, P.pos.z + Math.cos(a) * 110);
+    camera.position.lerp(camWant, 1 - Math.exp(-dt * 2));
+    camera.lookAt(P.pos);
+  } else {
+    const close = state.camMode === 1, dist = close ? 15 : 32, h = close ? 4 : 8.5;
+    camWant.copy(P.pos).addScaledVector(P.fwd, -dist); camWant.y += h;
+    for (let t = 1; t > 0.2 && solidAt(camWant.x, camWant.y, camWant.z); t -= 0.15) {
+      camWant.copy(P.pos).addScaledVector(P.fwd, -dist * t); camWant.y += h * t;
+    }
+    camera.position.lerp(camWant, 1 - Math.exp(-dt * (close ? 14 : 7)));
+    camLook.copy(P.pos).addScaledVector(P.fwd, 25); camLook.y += h * 0.35;
+    camera.lookAt(camLook);
+    camera.rotateZ(P.roll * 0.22);
+  }
+  if (state.shake > 0.01) {
+    camera.position.x += rnd(-1, 1) * state.shake * 1.4;
+    camera.position.y += rnd(-1, 1) * state.shake * 1.4;
+    state.shake *= Math.exp(-dt * 4);
+  }
+  const fov = 64 + (state.mode === 'title' ? 0 : clamp((P.speed - 128) / 67, -0.4, 1) * 10);
+  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); }
+  sky.position.copy(camera.position);
+  const scale = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  for (const m of pointMaterials) m.uniforms.uScale.value = scale;
+}
+
+// =====================================================================
+// HUD
+// =====================================================================
+const H = {
+  spd: el('hSpd'), alt: el('hAlt'), ab: el('hAb'), hull: el('hHull'), hullRow: el('hHullRow'), msl: el('hMsl'), flr: el('hFlr'),
+  lockState: el('hLockState'), score: el('hScore'), low: el('hLow'), radar: el('hRadar'), hdg: el('hHdg'), kills: el('hKills'),
+  tgtBar: el('hTgtBar'), warn: el('warn'), fpm: el('fpm'), tgtMk: el('tgtMk'), tgtTxt: el('tgtTxt'), lockBox: el('lockBox'),
+  dmg: el('dmg'), markers: el('markers'),
+};
+const markerPool = [];
+for (let i = 0; i < 40; i++) { const d = document.createElement('div'); d.className = 'mk'; d.innerHTML = '<i></i><span></span>'; d.style.display = 'none'; H.markers.appendChild(d); markerPool.push(d); }
+const radarCv = el('radar'), rc = radarCv.getContext('2d');
+let hudTextT = 0, radarT = 0, lastWarn = '';
+const _sp = V();
+function screenPos(p, out) {
+  _sp.copy(p).applyMatrix4(camera.matrixWorldInverse);
+  const behind = _sp.z > 0;
+  _sp.applyMatrix4(camera.projectionMatrix);
+  let x = _sp.x, y = _sp.y;
+  if (behind) { x = -x; y = -y; }
+  out.behind = behind; out.on = !behind && Math.abs(x) <= 1 && Math.abs(y) <= 1;
+  out.x = (x * 0.5 + 0.5) * innerWidth; out.y = (-y * 0.5 + 0.5) * innerHeight;
+  return out;
+}
+const sp1 = {}, sp2 = {};
+
+function updateHUD(dt) {
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('on'); }
+  if (state.mode === 'title') return;
+  state.dmgFlash = Math.max(0, state.dmgFlash - dt * 1.5);
+  H.dmg.style.opacity = state.dmgFlash.toFixed(2);
+
+  // threat picture
+  let tracking = 0, maxLock = 0, inbound = 0;
+  for (const s of world.sites) {
+    if (!s.alive || s.type !== 'sam') continue;
+    if (s.canSee) tracking++;
+    maxLock = Math.max(maxLock, s.lock);
+  }
+  for (const m of missiles) if (m.enemy && m.target === 'player') inbound++;
+  const flakNear = world.sites.some((s) => s.alive && s.type === 'aaa' && s.canSee);
+
+  hudTextT -= dt;
+  if (hudTextT <= 0) {
+    hudTextT = 0.08;
+    H.spd.textContent = Math.round(P.speed * 1.944);
+    H.alt.textContent = Math.max(0, Math.round(P.pos.y));
+    H.ab.style.width = `${P.boost * 100}%`;
+    H.ab.parentElement.style.color = P.boostLock ? 'var(--red)' : '';
+    H.hull.style.width = `${Math.max(0, P.hull)}%`;
+    H.hullRow.style.color = P.hull < 35 ? 'var(--red)' : P.hull < 65 ? 'var(--amber)' : '';
+    H.msl.textContent = P.missiles; H.flr.textContent = P.flares;
+    H.score.textContent = `SCORE ${state.score}`;
+    H.low.textContent = P.alive && P.pos.y < 50 && Math.abs(P.pos.x) < HALF && Math.abs(P.pos.z) < HALF ? 'LOW-LEVEL BONUS +12/s' : ' ';
+    H.tgtBar.style.width = `${Math.max(0, world.target.hp)}%`;
+    const hdg = ((((-P.yaw * 180) / Math.PI) % 360) + 360) % 360;
+    H.hdg.textContent = `HDG ${String(Math.round(hdg) % 360).padStart(3, '0')}`;
+    H.kills.textContent = `SAM ${state.kills.sam}  AAA ${state.kills.aaa}`;
+    if (P.lockObj) { H.lockState.textContent = P.locked ? 'LOCKED' : 'LOCKING…'; H.lockState.className = P.locked ? 'redtxt' : 'amber'; }
+    else { H.lockState.textContent = P.missiles ? 'NO LOCK' : 'NO MISSILES'; H.lockState.className = 'dim'; }
+    if (inbound) { H.radar.textContent = 'MISSILE INBOUND'; H.radar.className = 'st red'; }
+    else if (maxLock > 0.6 && tracking) { H.radar.textContent = 'RADAR LOCK'; H.radar.className = 'st red'; }
+    else if (tracking) { H.radar.textContent = `TRACKED ×${tracking}${P.pos.y < LOW_ALT ? ' (CLUTTER)' : ''}`; H.radar.className = 'st amber'; }
+    else { H.radar.textContent = 'RADAR: MASKED'; H.radar.className = 'st'; }
+
+    const w = [];
+    if (P.alive && (state.mode === 'play' || state.mode === 'winning')) {
+      if (inbound) w.push(['MISSILE', 'red']);
+      else if (maxLock > 0.6 && tracking) w.push(['LOCK', 'red']);
+      if (P.pullUp) w.push(['PULL UP', 'red']);
+      if (state.oobT > 0) w.push([`RETURN TO AO  ${Math.max(0, Math.ceil(8 - state.oobT))}`, 'amber']);
+      if (flakNear && !inbound) w.push(['FLAK', 'amber']);
+    }
+    const key = w.map((x) => x.join()).join('|');
+    if (key !== lastWarn) { lastWarn = key; H.warn.innerHTML = w.map(([t, c]) => `<div class="w ${c}">${t}</div>`).join(''); }
+  }
+
+  // flight path marker
+  if (P.alive) {
+    screenPos(tmp.copy(P.pos).addScaledVector(P.fwd, 400), sp1);
+    H.fpm.style.display = sp1.on ? '' : 'none';
+    H.fpm.style.left = `${sp1.x}px`; H.fpm.style.top = `${sp1.y}px`;
+  } else H.fpm.style.display = 'none';
+
+  // target marker (clamped to the screen edge when off-screen)
+  const T = world.target;
+  H.tgtMk.style.display = T.alive ? '' : 'none';
+  if (T.alive) {
+    screenPos(T.aim, sp1);
+    const dist = T.aim.distanceTo(P.pos);
+    H.tgtTxt.textContent = `TGT ${(dist / 1000).toFixed(1)} km`;
+    let x = sp1.x, y = sp1.y;
+    if (!sp1.on) {
+      const cx = innerWidth / 2, cy = innerHeight / 2;
+      let dx = x - cx, dy = y - cy;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) dy = 1;
+      const s = Math.min((cx - 60) / Math.abs(dx || 1e-6), (cy - 60) / Math.abs(dy || 1e-6));
+      x = cx + dx * s; y = cy + dy * s;
+      H.tgtMk.querySelector('.arrow').style.transform = `rotate(${Math.atan2(dy, dx) + Math.PI / 2}rad)`;
+    }
+    H.tgtMk.classList.toggle('off', !sp1.on);
+    H.tgtMk.style.left = `${x}px`; H.tgtMk.style.top = `${y}px`;
+  }
+
+  // threat markers
+  let mi = 0;
+  for (const s of world.sites) {
+    if (!s.alive || mi >= markerPool.length) continue;
+    const d = s.aim.distanceTo(P.pos);
+    if (d > 1700) continue;
+    screenPos(s.aim, sp2);
+    if (!sp2.on) continue;
+    const mk = markerPool[mi++];
+    mk.style.display = '';
+    mk.style.left = `${sp2.x}px`; mk.style.top = `${sp2.y}px`;
+    mk.className = s.canSee ? 'mk' : 'mk idle';
+    mk.lastChild.textContent = d < 1200 ? `${s.type.toUpperCase()} ${Math.round(d)}` : s.type.toUpperCase();
+  }
+  for (; mi < markerPool.length; mi++) markerPool[mi].style.display = 'none';
+
+  // missile lock box
+  if (P.lockObj && P.alive) {
+    screenPos(P.lockObj.aim, sp2);
+    H.lockBox.classList.toggle('hidden', !sp2.on);
+    H.lockBox.classList.toggle('locked', P.locked);
+    H.lockBox.firstChild.textContent = P.locked ? 'LOCK' : 'LOCKING';
+    H.lockBox.style.left = `${sp2.x}px`; H.lockBox.style.top = `${sp2.y}px`;
+  } else H.lockBox.classList.add('hidden');
+
+  radarT -= dt;
+  if (radarT <= 0) { radarT = 1 / 15; drawRadar(); }
+}
+
+function drawRadar() {
+  const W = radarCv.width, R = W / 2, range = 1400, k = (R - 8) / range;
+  rc.clearRect(0, 0, W, W);
+  rc.save();
+  rc.beginPath(); rc.arc(R, R, R - 3, 0, Math.PI * 2); rc.fillStyle = 'rgba(4,18,12,0.72)'; rc.fill(); rc.clip();
+  rc.save();
+  rc.translate(R, R); rc.scale(k, k); rc.rotate(P.yaw); rc.translate(-P.pos.x, -P.pos.z);
+  const lim = range + 100;
+  for (const b of world.buildings) {
+    if (Math.abs(b.x0 - P.pos.x) > lim || Math.abs(b.z0 - P.pos.z) > lim) continue;
+    rc.fillStyle = b.h > P.pos.y - 5 ? 'rgba(150,255,190,0.5)' : 'rgba(120,200,160,0.14)';
+    rc.fillRect(b.x0, b.z0, b.x1 - b.x0, b.z1 - b.z0);
+  }
+  for (const s of world.sites) {
+    if (!s.alive) continue;
+    if (s.type === 'sam' && s.canSee) {
+      rc.beginPath(); rc.arc(s.pos.x, s.pos.z, SAM_RANGE, 0, Math.PI * 2);
+      rc.strokeStyle = 'rgba(255,80,80,0.35)'; rc.lineWidth = 2 / k; rc.stroke();
+    }
+    rc.beginPath(); rc.arc(s.pos.x, s.pos.z, (s.type === 'sam' ? 7 : 5) / k, 0, Math.PI * 2);
+    rc.fillStyle = s.type === 'sam' ? (s.canSee ? '#ff4f4f' : '#b04040') : (s.canSee ? '#ffbf47' : '#a07830');
+    rc.fill();
+  }
+  for (const m of missiles) {
+    rc.beginPath(); rc.arc(m.pos.x, m.pos.z, 4 / k, 0, Math.PI * 2);
+    rc.fillStyle = m.enemy ? '#ffffff' : '#9dffb8'; rc.fill();
+  }
+  for (const f of flares) { rc.beginPath(); rc.arc(f.pos.x, f.pos.z, 3 / k, 0, Math.PI * 2); rc.fillStyle = '#ffe9a0'; rc.fill(); }
+  rc.restore();
+  // target, clamped to the rim
+  const T = world.target;
+  if (T.alive) {
+    const dx = T.pos.x - P.pos.x, dz = T.pos.z - P.pos.z, cy = Math.cos(P.yaw), sy = Math.sin(P.yaw);
+    let x = (dx * cy - dz * sy) * k, y = (dx * sy + dz * cy) * k;
+    const r = Math.hypot(x, y), maxR = R - 14;
+    if (r > maxR) { x *= maxR / r; y *= maxR / r; }
+    rc.save(); rc.translate(R + x, R + y); rc.rotate(Math.PI / 4);
+    rc.fillStyle = '#ffe066'; rc.fillRect(-7, -7, 14, 14); rc.restore();
+  }
+  rc.restore();
+  rc.strokeStyle = 'rgba(157,255,184,0.5)'; rc.lineWidth = 2;
+  for (const f of [1, 0.5]) { rc.beginPath(); rc.arc(R, R, (R - 4) * f, 0, Math.PI * 2); rc.stroke(); }
+  rc.fillStyle = '#9dffb8';
+  rc.beginPath(); rc.moveTo(R, R - 12); rc.lineTo(R - 8, R + 9); rc.lineTo(R, R + 4); rc.lineTo(R + 8, R + 9); rc.closePath(); rc.fill();
+  rc.font = '20px "Share Tech Mono", monospace'; rc.fillStyle = 'rgba(157,255,184,0.7)';
+  rc.fillText('1.4 km', R + 10, W - 14);
+}
+
+// =====================================================================
+// Audio cues
+// =====================================================================
+let beepT = 0, pullT = 0, lockToneT = 0;
+function updateAudioCues(dt) {
+  if (!audio.ctx) return;
+  const flying = P.alive && (state.mode === 'play' || state.mode === 'winning');
+  audio.engine(P.speed / 195, P.boosting, flying || (state.mode === 'over' && P.alive));
+  if (!flying) return;
+  let inbound = false, tracked = false, locked = false;
+  for (const m of missiles) if (m.enemy && m.target === 'player') inbound = true;
+  for (const s of world.sites) if (s.alive && s.type === 'sam' && s.canSee) { tracked = true; if (s.lock > 0.6) locked = true; }
+  beepT -= dt;
+  if (beepT <= 0) {
+    if (inbound) { audio.beep(1250, 0.07, 0.07); beepT = 0.14; }
+    else if (locked) { audio.beep(980, 0.12, 0.06); beepT = 0.3; }
+    else if (tracked) { audio.beep(760, 0.1, 0.045); beepT = 0.7; }
+    else beepT = 0.1;
+  }
+  pullT -= dt;
+  if (P.pullUp && pullT <= 0) { audio.beep(520, 0.12, 0.06, 'sawtooth'); pullT = 0.32; }
+  lockToneT -= dt;
+  if (P.locked && lockToneT <= 0) { audio.beep(1800, 0.05, 0.025, 'sine'); lockToneT = 0.25; }
+}
+
+// =====================================================================
+// Main loop
+// =====================================================================
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  tick(dt);
+}
+function tick(dt) {
+  if (state.mode === 'paused') { renderer.render(scene, camera); return; }
+  state.time += dt;
+
+  for (let i = state.timers.length - 1; i >= 0; i--) {
+    const t = state.timers[i]; t.t -= dt;
+    if (t.t <= 0) { state.timers.splice(i, 1); t.fn(); }
+  }
+
+  if (state.mode === 'play' || state.mode === 'winning') {
+    state.missionT += state.mode === 'play' ? dt : 0;
+    updatePlayer(dt);
+    if (P.alive) updateLock(dt);
+  } else if (state.mode === 'over' && P.alive) {   // fly away on autopilot behind the results screen
+    P.pitch += (0.2 - P.pitch) * dt; P.roll *= 1 - dt * 2; P.yawRate *= 1 - dt * 2;
+    const cp = Math.cos(P.pitch);
+    P.fwd.set(-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp);
+    P.vel.copy(P.fwd).multiplyScalar(P.speed); P.pos.addScaledVector(P.vel, dt);
+  }
+  if (P.alive && state.mode !== 'title') placeJet();
+  if (state.mode !== 'title') {
+    updateSites(dt); updateMissiles(dt); updateShells(dt); updateFlares(dt);
+  }
+  updateTarget(dt);
+  traffic.update(dt);
+  fx.update(dt); smoke.update(dt);
+  for (const l of flashLights) l.intensity *= Math.exp(-dt * 7);
+  if (world.warn) world.warn.material.uniforms.uGlobal.value = (state.time % 1.6) < 0.8 ? 1 : 0.15;
+
+  if ((state.mode === 'dying' || state.mode === 'winning') && (state.endT -= dt) <= 0) endMission(state.mode === 'winning' && P.alive);
+
+  updateCamera(dt);
+  updateHUD(dt);
+  updateAudioCues(dt);
+  renderer.render(scene, camera);
+}
+
+// Boot: build mission 1 as the title-screen backdrop
+buildLevel(1);
+jet.g.visible = false; shadow.visible = false;
+el('loading').remove();
+showScreen('title');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
